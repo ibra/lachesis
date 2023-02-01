@@ -1,2 +1,2 @@
-# atropos
-lightweight &amp; powerful time-tracker for Windows 
+# atros
+lightweight &amp; powerful cross-platform time-tracker
