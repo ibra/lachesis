@@ -1,2 +1,2 @@
-# atro[po]s
+# atros
 lightweight &amp; powerful cross-platform time-tracker
