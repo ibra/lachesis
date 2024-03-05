@@ -1,11 +1,10 @@
 use std::fs::File;
-use std::io::{BufRead, Write};
+use std::io::BufRead;
 use std::{fs, io};
 
 use clap::{Parser, Subcommand};
 use tabled::{Table, Tabled};
 use tasklist;
-use windows::core::*;
 
 #[derive(Parser)]
 #[command(author, version)]
@@ -28,8 +27,7 @@ enum Commands {
     List {},
 }
 
-#[cfg(windows)]
-fn main() -> Result<()> {
+fn main() {
     use std::process::Command;
 
     let cli = Cli::parse();
@@ -67,8 +65,6 @@ fn main() -> Result<()> {
             println!("Stopping window tracking.");
         }
     }
-
-    Ok(())
 }
 
 fn get_config() -> io::Result<String> {
