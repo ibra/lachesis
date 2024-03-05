@@ -1,11 +1,12 @@
 [package]
-name = "atropos"
+name = "lachesis"
 authors = ["Ibrahim Hisham <ibrahim.hisham@proton.me>"]
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 clap = { version = "4.1.6", features = ["cargo", "derive"] }
+tabled = "0.15.0"
 tasklist = "0.2.12"
 
 [dependencies.windows]

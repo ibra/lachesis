@@ -1,2 +1,3 @@
-# atropos
-lightweight &amp; powerful cross-platform time-tracker
+# lachesis
+
+lightweight &amp; powerful time-tracking for windows
