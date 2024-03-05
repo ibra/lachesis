@@ -53,7 +53,7 @@ fn main() -> Result<()> {
             monitor
                 .args(["/C", "start", "ls", "arguments"])
                 .spawn()
-                .expect("Failed to execute second program");
+                .expect("failed to execute laches_mon (monitoring application).");
         }
 
         Commands::List {} => {
@@ -62,6 +62,7 @@ fn main() -> Result<()> {
                 println!("{} | {} seconds", window.title, window.uptime);
             }
         }
+
         Commands::Stop {} => {
             println!("Stopping window tracking.");
         }
