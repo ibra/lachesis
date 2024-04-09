@@ -1,4 +1,5 @@
 [workspace]
 members = ["laches", "laches_mon"]
+resolver = "2"
 
 [workspace.dependencies]

@@ -81,7 +81,7 @@ fn get_config() -> io::Result<String> {
         Ok(first_line)
     } else {
         create_config();
-        Ok("whoopsies".to_string())
+        Ok("No config exists, creating...".to_string())
     }
 }
 
