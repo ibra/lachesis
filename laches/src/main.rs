@@ -1,9 +1,12 @@
-use std::fs::File;
-use std::io::BufRead;
-use std::{fs, io};
+use std::{
+    error::Error,
+    fs::{File, OpenOptions},
+    io::{BufReader, Read, Write},
+    path::Path,
+};
 
 use clap::{Parser, Subcommand};
-use tabled::{Table, Tabled};
+use serde::{Deserialize, Serialize};
 use tasklist;
 
 #[derive(Parser)]
@@ -16,7 +19,7 @@ struct Cli {
 
 struct ActiveWindow {
     title: String,
-    uptime: u64,
+    uptime: u32,
 }
 
 #[derive(Subcommand)]
@@ -27,14 +30,35 @@ enum Commands {
     List {},
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct LachesConfig {
+    autostart: bool,      // whether the program runs on startup in seconds
+    update_interval: u32, // how often the list of windows gets updated, in miliseconds
+}
+
+impl Default for LachesConfig {
+    fn default() -> Self {
+        Self {
+            autostart: true,
+            update_interval: 10,
+        }
+    }
+}
+
+const CONFIG_PATH: &str = "%PROGRAMDATA%\\lachesis\\config\\%P%";
+
 fn main() {
     use std::process::Command;
 
     let cli = Cli::parse();
-    let mut config = fs::read_to_string("config.ini");
     let mut active_windows: Vec<ActiveWindow> = Vec::new();
 
-    let mut monitor = Command::new("cmd");
+    let mut monitor = Command::new("");
+
+    let config = match load_or_create_config("config.json") {
+        Ok(config) => config,
+        Err(_) => panic!("Error encountered while attempting to load config file."),
+    };
 
     match &cli.command {
         Commands::Autostart { toggle } => {
@@ -44,6 +68,7 @@ fn main() {
                 println!("disabled boot on startup.")
             }
         }
+
         Commands::Start {} => {
             active_windows = get_active_processes();
             println!("started monitoring {} windows", active_windows.len());
@@ -67,25 +92,26 @@ fn main() {
     }
 }
 
-fn get_config() -> io::Result<String> {
-    let file_path = "config.ini";
+fn load_or_create_config(filename: &str) -> Result<LachesConfig, Box<dyn Error>> {
+    let config_path = Path::new(filename);
 
-    if fs::metadata(&file_path).is_ok() {
-        let mut file = File::create(&file_path);
+    if !config_path.exists() {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(config_path)?;
+
+        let config_json = serde_json::to_string(&LachesConfig::default())?;
+        file.write_all(config_json.as_bytes())?;
     }
 
-    let file = File::open(&file_path)?;
-    let mut lines = io::BufReader::new(file).lines();
+    let file = File::open(filename)?;
 
-    if let Some(Ok(first_line)) = lines.next() {
-        Ok(first_line)
-    } else {
-        create_config();
-        Ok("No config exists, creating...".to_string())
-    }
+    let reader = BufReader::new(file);
+    let laches_config = serde_json::from_reader(reader)?;
+
+    Ok(laches_config)
 }
-
-fn create_config() {}
 
 fn get_active_processes() -> Vec<ActiveWindow> {
     let mut active_windows: Vec<ActiveWindow> = Vec::new();
