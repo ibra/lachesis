@@ -55,7 +55,7 @@ fn main() {
 
     let config = match load_or_create_config(CONFIG_NAME) {
         Ok(config) => config,
-        Err(error) => panic!("Error encountered while attempting to load config file: {}", error)
+        Err(error) => panic!("error: failed to load config file: {}", error)
     };
 
     match &cli.command {
@@ -74,7 +74,7 @@ fn main() {
             monitor
                 .args(["/C", "start", "ls", "arguments"])
                 .spawn()
-                .expect("failed to execute laches_mon (monitoring daemon).");
+                .expect("error: failed to execute laches_mon (monitoring daemon).");
         }
 
         Commands::List {} => {
@@ -84,12 +84,13 @@ fn main() {
             }
 
             if all_windows.is_empty() {
-                println!("no running windows.")
+                println!("warning: no running windows.")
             }
         }
 
         Commands::Stop {} => {
-            println!("Stopping window tracking.");
+            println!("info: attempting to kill daemon");
+            // todo: kill daemon
         }
     }
 }
@@ -125,7 +126,6 @@ fn get_all_processes(laches_config: &LachesConfig) -> Vec<Process> {
 
     all_processes
 }
-
 
 fn get_active_processes() -> Vec<Process> {
     let mut active_processes: Vec<Process> = Vec::new();
