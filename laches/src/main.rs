@@ -1,13 +1,10 @@
 use std::{
-    error::Error,
-    fs::{File, OpenOptions},
-    io::{BufReader, Read, Write},
-    path::Path,
-};
+    error::Error, fs::{self, File, OpenOptions}, io::{BufReader, Write}};
 
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use tasklist;
+use dirs;
 
 #[derive(Parser)]
 #[command(author, version)]
@@ -17,7 +14,8 @@ struct Cli {
     command: Commands,
 }
 
-struct ActiveWindow {
+#[derive(Deserialize, Serialize)]
+struct Process {
     title: String,
     uptime: u32,
 }
@@ -30,10 +28,11 @@ enum Commands {
     List {},
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 struct LachesConfig {
     autostart: bool,      // whether the program runs on startup in seconds
     update_interval: u32, // how often the list of windows gets updated, in miliseconds
+    process_information: Vec<Process>
 }
 
 impl Default for LachesConfig {
@@ -41,24 +40,25 @@ impl Default for LachesConfig {
         Self {
             autostart: true,
             update_interval: 10,
+            process_information: Vec::new(),
         }
     }
 }
 
-const CONFIG_PATH: &str = "%PROGRAMDATA%\\lachesis\\config\\%P%";
+const CONFIG_NAME: &str = "config.json";
 
 fn main() {
     use std::process::Command;
 
     let cli = Cli::parse();
-    let mut active_windows: Vec<ActiveWindow> = Vec::new();
-
     let mut monitor = Command::new("");
 
-    let config = match load_or_create_config("config.json") {
+    let config = match load_or_create_config(CONFIG_NAME) {
         Ok(config) => config,
-        Err(_) => panic!("Error encountered while attempting to load config file."),
+        Err(error) => panic!("Error encountered while attempting to load config file: {}", error)
     };
+
+
 
     match &cli.command {
         Commands::Autostart { toggle } => {
@@ -93,28 +93,29 @@ fn main() {
 }
 
 fn load_or_create_config(filename: &str) -> Result<LachesConfig, Box<dyn Error>> {
-    let config_path = Path::new(filename);
+    let config_path = dirs::config_dir().unwrap().join("./lachesis");
 
-    if !config_path.exists() {
+    if !&config_path.join(filename).exists() {
+        fs::create_dir_all(&config_path).expect("Failed to create directories");
+
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
-            .open(config_path)?;
+            .open(&config_path.join(filename))?;
 
         let config_json = serde_json::to_string(&LachesConfig::default())?;
         file.write_all(config_json.as_bytes())?;
     }
 
-    let file = File::open(filename)?;
-
+    let file = File::open(&config_path.join(filename))?;
     let reader = BufReader::new(file);
     let laches_config = serde_json::from_reader(reader)?;
 
     Ok(laches_config)
 }
 
-fn get_active_processes() -> Vec<ActiveWindow> {
-    let mut active_windows: Vec<ActiveWindow> = Vec::new();
+fn get_active_processes() -> Vec<Process> {
+    let mut active_windows: Vec<Process> = Vec::new();
 
     for i in unsafe { tasklist::Tasklist::new() } {
         let name = match i.get_file_info().get("ProductName") {
@@ -128,7 +129,7 @@ fn get_active_processes() -> Vec<ActiveWindow> {
             continue;
         }
 
-        active_windows.push(ActiveWindow {
+        active_windows.push(Process {
             title: name,
             uptime: 0,
         });
