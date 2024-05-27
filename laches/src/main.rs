@@ -51,7 +51,7 @@ fn main() {
     use std::process::Command;
 
     let cli = Cli::parse();
-    let mut monitor = Command::new("");
+    let mut monitor = Command::new("laches_mon");
 
     let config = match load_or_create_config(CONFIG_NAME) {
         Ok(config) => config,
@@ -72,9 +72,9 @@ fn main() {
             println!("started monitoring {} windows", &active_windows.len());
 
             monitor
-                .args(["/C", "start", "ls", "arguments"])
+                .args(["/C", format!("{}", config.update_interval).as_str()])
                 .spawn()
-                .expect("error: failed to execute laches_mon (monitoring daemon).");
+                .expect("error: failed to execute laches_mon (monitoring daemon)");
         }
 
         Commands::List {} => {
