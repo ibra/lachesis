@@ -14,7 +14,7 @@ struct Cli {
     command: Commands,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 struct Process {
     title: String,
     uptime: u32,
@@ -58,8 +58,6 @@ fn main() {
         Err(error) => panic!("Error encountered while attempting to load config file: {}", error)
     };
 
-
-
     match &cli.command {
         Commands::Autostart { toggle } => {
             if toggle == "on" {
@@ -70,19 +68,23 @@ fn main() {
         }
 
         Commands::Start {} => {
-            active_windows = get_active_processes();
-            println!("started monitoring {} windows", active_windows.len());
+            let active_windows = get_active_processes();
+            println!("started monitoring {} windows", &active_windows.len());
 
             monitor
                 .args(["/C", "start", "ls", "arguments"])
                 .spawn()
-                .expect("failed to execute laches_mon (monitoring application).");
+                .expect("failed to execute laches_mon (monitoring daemon).");
         }
 
         Commands::List {} => {
-            active_windows = get_active_processes();
-            for window in active_windows {
+            let all_windows = get_all_processes(&config);
+            for window in &all_windows {
                 println!("{} | {} seconds", window.title, window.uptime);
+            }
+
+            if all_windows.is_empty() {
+                println!("no running windows.")
             }
         }
 
@@ -114,25 +116,36 @@ fn load_or_create_config(filename: &str) -> Result<LachesConfig, Box<dyn Error>>
     Ok(laches_config)
 }
 
-fn get_active_processes() -> Vec<Process> {
-    let mut active_windows: Vec<Process> = Vec::new();
+fn get_all_processes(laches_config: &LachesConfig) -> Vec<Process> {
+    let mut all_processes: Vec<Process> = Vec::new();
 
-    for i in unsafe { tasklist::Tasklist::new() } {
-        let name = match i.get_file_info().get("ProductName") {
+    for process in  &laches_config.process_information {
+       all_processes.push(process.clone()); 
+    }
+
+    all_processes
+}
+
+
+fn get_active_processes() -> Vec<Process> {
+    let mut active_processes: Vec<Process> = Vec::new();
+
+    for process in unsafe { tasklist::Tasklist::new() } {
+        let name = match process.get_file_info().get("ProductName") {
             Some(h) => h.to_string(),
             None => "".to_string(),
         };
 
-        let contains_title = active_windows.iter().any(|window| window.title == name);
+        let contains_title = active_processes.iter().any(|window| window.title == name);
 
         if name.trim() == "" || contains_title {
             continue;
         }
 
-        active_windows.push(Process {
+        active_processes.push(Process {
             title: name,
             uptime: 0,
         });
     }
-    active_windows
+    active_processes
 }
