@@ -30,9 +30,9 @@ enum Commands {
 
 #[derive(Deserialize, Serialize)]
 struct LachesConfig {
-    autostart: bool,      // whether the program runs on startup in seconds
-    update_interval: u32, // how often the list of windows gets updated, in miliseconds
-    process_information: Vec<Process>
+    autostart: bool,      // whether the program runs on startup (yes/no) 
+    update_interval: u64, // how often the list of windows gets updated (miliseconds)
+    process_information: Vec<Process>  // vector storing all recorded windows    
 }
 
 impl Default for LachesConfig {
@@ -60,10 +60,10 @@ fn main() {
 
     match &cli.command {
         Commands::Autostart { toggle } => {
-            if toggle == "on" {
-                println!("enabled boot on startup.")
-            } else if toggle == "off" {
-                println!("disabled boot on startup.")
+            if toggle == "yes" {
+                println!("info: enabled boot on startup.")
+            } else if toggle == "no" {
+                println!("info: disabled boot on startup.")
             }
         }
 
@@ -84,7 +84,7 @@ fn main() {
             }
 
             if all_windows.is_empty() {
-                println!("warning: no running windows.")
+                println!("warning: no  windows.")
             }
         }
 
