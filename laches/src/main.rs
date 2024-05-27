@@ -72,7 +72,7 @@ fn main() {
             println!("started monitoring {} windows", &active_windows.len());
 
             monitor
-                .args(["/C", format!("{}", config.update_interval).as_str()])
+                .arg(&config.update_interval.to_string())
                 .spawn()
                 .expect("error: failed to execute laches_mon (monitoring daemon)");
         }
@@ -84,13 +84,12 @@ fn main() {
             }
 
             if all_windows.is_empty() {
-                println!("warning: no  windows.")
+                println!("warning: no monitored windows.")
             }
         }
 
         Commands::Stop {} => {
             println!("info: attempting to kill daemon");
-            // todo: kill daemon
         }
     }
 }
