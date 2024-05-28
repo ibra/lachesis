@@ -3,3 +3,8 @@ name = "laches_mon"
 authors = ["Ibrahim Hisham <ibrahim.hisham@proton.me>"]
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+clap.workspace = true 
+serde.workspace = true 
+serde_json.workspace = true
