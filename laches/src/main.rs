@@ -1,13 +1,12 @@
 use clap::{Parser, Subcommand};
 use dirs;
-use laches::{LachesStore, Process};
+use laches::{get_active_processes, LachesStore, Process};
 use std::{
     error::Error,
     fs::{self, File, OpenOptions},
     io::{BufReader, Write},
     path::PathBuf,
 };
-use tasklist;
 
 #[derive(Parser)]
 #[command(author, version)]
@@ -108,27 +107,4 @@ fn get_all_processes(laches_config: &LachesStore) -> Vec<Process> {
     }
 
     all_processes
-}
-
-fn get_active_processes() -> Vec<Process> {
-    let mut active_processes: Vec<Process> = Vec::new();
-
-    for process in unsafe { tasklist::Tasklist::new() } {
-        let name = match process.get_file_info().get("ProductName") {
-            Some(h) => h.to_string(),
-            None => "".to_string(),
-        };
-
-        let contains_title = active_processes.iter().any(|window| window.title == name);
-
-        if name.trim() == "" || contains_title {
-            continue;
-        }
-
-        active_processes.push(Process {
-            title: name,
-            uptime: 0,
-        });
-    }
-    active_processes
 }
