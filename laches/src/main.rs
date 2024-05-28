@@ -1,10 +1,13 @@
-use std::{
-    error::Error, fs::{self, File, OpenOptions}, io::{BufReader, Write}};
-
 use clap::{Parser, Subcommand};
-use serde::{Deserialize, Serialize};
-use tasklist;
 use dirs;
+use laches::{LachesStore, Process};
+use std::{
+    error::Error,
+    fs::{self, File, OpenOptions},
+    io::{BufReader, Write},
+    path::PathBuf,
+};
+use tasklist;
 
 #[derive(Parser)]
 #[command(author, version)]
@@ -12,12 +15,6 @@ use dirs;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
-}
-
-#[derive(Deserialize, Serialize, Clone)]
-struct Process {
-    title: String,
-    uptime: u32,
 }
 
 #[derive(Subcommand)]
@@ -28,24 +25,7 @@ enum Commands {
     List {},
 }
 
-#[derive(Deserialize, Serialize)]
-struct LachesConfig {
-    autostart: bool,      // whether the program runs on startup (yes/no) 
-    update_interval: u64, // how often the list of windows gets updated (miliseconds)
-    process_information: Vec<Process>  // vector storing all recorded windows    
-}
-
-impl Default for LachesConfig {
-    fn default() -> Self {
-        Self {
-            autostart: true,
-            update_interval: 10,
-            process_information: Vec::new(),
-        }
-    }
-}
-
-const CONFIG_NAME: &str = "config.json";
+const CONFIG_NAME: &str = "store.json";
 
 fn main() {
     use std::process::Command;
@@ -53,9 +33,11 @@ fn main() {
     let cli = Cli::parse();
     let mut monitor = Command::new("laches_mon");
 
-    let config = match load_or_create_config(CONFIG_NAME) {
+    let store_path = dirs::config_dir().unwrap().join("lachesis");
+
+    let config = match load_or_create_config(CONFIG_NAME, &store_path) {
         Ok(config) => config,
-        Err(error) => panic!("error: failed to load config file: {}", error)
+        Err(error) => panic!("error: failed to load config file: {}", error),
     };
 
     match &cli.command {
@@ -73,6 +55,7 @@ fn main() {
 
             monitor
                 .arg(&config.update_interval.to_string())
+                .arg(&store_path.join(CONFIG_NAME))
                 .spawn()
                 .expect("error: failed to execute laches_mon (monitoring daemon)");
         }
@@ -94,33 +77,34 @@ fn main() {
     }
 }
 
-fn load_or_create_config(filename: &str) -> Result<LachesConfig, Box<dyn Error>> {
-    let config_path = dirs::config_dir().unwrap().join("./lachesis");
-
-    if !&config_path.join(filename).exists() {
-        fs::create_dir_all(&config_path).expect("Failed to create directories");
+fn load_or_create_config(
+    file_name: &str,
+    file_path: &PathBuf,
+) -> Result<LachesStore, Box<dyn Error>> {
+    if !&file_path.join(file_name).exists() {
+        fs::create_dir_all(&file_path).expect("Failed to create directories");
 
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
-            .open(&config_path.join(filename))?;
+            .open(&file_path.join(file_name))?;
 
-        let config_json = serde_json::to_string(&LachesConfig::default())?;
+        let config_json = serde_json::to_string(&LachesStore::default())?;
         file.write_all(config_json.as_bytes())?;
     }
 
-    let file = File::open(&config_path.join(filename))?;
+    let file = File::open(&file_path.join(file_name))?;
     let reader = BufReader::new(file);
     let laches_config = serde_json::from_reader(reader)?;
 
     Ok(laches_config)
 }
 
-fn get_all_processes(laches_config: &LachesConfig) -> Vec<Process> {
+fn get_all_processes(laches_config: &LachesStore) -> Vec<Process> {
     let mut all_processes: Vec<Process> = Vec::new();
 
-    for process in  &laches_config.process_information {
-       all_processes.push(process.clone()); 
+    for process in &laches_config.process_information {
+        all_processes.push(process.clone());
     }
 
     all_processes
