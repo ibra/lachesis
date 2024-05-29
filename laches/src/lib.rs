@@ -4,7 +4,7 @@ use tasklist;
 #[derive(Deserialize, Serialize, Clone)]
 pub struct Process {
     pub title: String,
-    pub uptime: u32,
+    pub uptime: u64,
 }
 
 #[derive(Deserialize, Serialize)]
