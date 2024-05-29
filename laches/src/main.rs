@@ -34,7 +34,7 @@ fn main() {
 
     let store_path = dirs::config_dir().unwrap().join("lachesis");
 
-    let laches_store = match load_or_create_config(STORE_NAME, &store_path) {
+    let laches_store = match load_or_create_store(STORE_NAME, &store_path) {
         Ok(laches_store) => laches_store,
         Err(error) => panic!("error: failed to load config file: {}", error),
     };
@@ -76,23 +76,23 @@ fn main() {
     }
 }
 
-fn load_or_create_config(
-    file_name: &str,
+fn load_or_create_store(
+    store_name: &str,
     file_path: &PathBuf,
 ) -> Result<LachesStore, Box<dyn Error>> {
-    if !&file_path.join(file_name).exists() {
+    if !&file_path.join(store_name).exists() {
         fs::create_dir_all(&file_path).expect("error: failed to create directories");
 
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
-            .open(&file_path.join(file_name))?;
+            .open(&file_path.join(store_name))?;
 
         let laches_store = serde_json::to_string(&LachesStore::default())?;
         file.write_all(laches_store.as_bytes())?;
     }
 
-    let file = File::open(&file_path.join(file_name))?;
+    let file = File::open(&file_path.join(store_name))?;
     let reader = BufReader::new(file);
     let laches_store = serde_json::from_reader(reader)?;
 
