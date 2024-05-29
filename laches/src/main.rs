@@ -24,7 +24,7 @@ enum Commands {
     List {},
 }
 
-const CONFIG_NAME: &str = "store.json";
+const STORE_NAME: &str = "store.json";
 
 fn main() {
     use std::process::Command;
@@ -34,8 +34,8 @@ fn main() {
 
     let store_path = dirs::config_dir().unwrap().join("lachesis");
 
-    let config = match load_or_create_config(CONFIG_NAME, &store_path) {
-        Ok(config) => config,
+    let laches_store = match load_or_create_config(STORE_NAME, &store_path) {
+        Ok(laches_store) => laches_store,
         Err(error) => panic!("error: failed to load config file: {}", error),
     };
 
@@ -53,14 +53,14 @@ fn main() {
             println!("started monitoring {} windows", &active_windows.len());
 
             monitor
-                .arg(&config.update_interval.to_string())
-                .arg(&store_path.join(CONFIG_NAME))
+                .arg(&laches_store.update_interval.to_string())
+                .arg(&store_path.join(STORE_NAME))
                 .spawn()
                 .expect("error: failed to execute laches_mon (monitoring daemon)");
         }
 
         Commands::List {} => {
-            let all_windows = get_all_processes(&config);
+            let all_windows = get_all_processes(&laches_store);
             for window in &all_windows {
                 println!("{} | {} seconds", window.title, window.uptime);
             }
@@ -88,13 +88,13 @@ fn load_or_create_config(
             .write(true)
             .open(&file_path.join(file_name))?;
 
-        let config_json = serde_json::to_string(&LachesStore::default())?;
-        file.write_all(config_json.as_bytes())?;
+        let laches_store = serde_json::to_string(&LachesStore::default())?;
+        file.write_all(laches_store.as_bytes())?;
     }
 
     let file = File::open(&file_path.join(file_name))?;
     let reader = BufReader::new(file);
-    let laches_config = serde_json::from_reader(reader)?;
+    let laches_store = serde_json::from_reader(reader)?;
 
-    Ok(laches_config)
+    Ok(laches_store)
 }
