@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use dirs;
-use laches::{get_active_processes, LachesStore, Process};
+use laches::{get_active_processes, get_all_processes, LachesStore, Process};
 use std::{
     error::Error,
     fs::{self, File, OpenOptions},
@@ -81,7 +81,7 @@ fn load_or_create_config(
     file_path: &PathBuf,
 ) -> Result<LachesStore, Box<dyn Error>> {
     if !&file_path.join(file_name).exists() {
-        fs::create_dir_all(&file_path).expect("Failed to create directories");
+        fs::create_dir_all(&file_path).expect("error: failed to create directories");
 
         let mut file = OpenOptions::new()
             .create(true)
@@ -97,14 +97,4 @@ fn load_or_create_config(
     let laches_config = serde_json::from_reader(reader)?;
 
     Ok(laches_config)
-}
-
-fn get_all_processes(laches_config: &LachesStore) -> Vec<Process> {
-    let mut all_processes: Vec<Process> = Vec::new();
-
-    for process in &laches_config.process_information {
-        all_processes.push(process.clone());
-    }
-
-    all_processes
 }

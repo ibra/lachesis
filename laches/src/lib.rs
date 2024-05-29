@@ -46,3 +46,13 @@ pub fn get_active_processes() -> Vec<Process> {
     }
     active_processes
 }
+
+pub fn get_all_processes(laches_config: &LachesStore) -> Vec<Process> {
+    let mut all_processes: Vec<Process> = Vec::new();
+
+    for process in &laches_config.process_information {
+        all_processes.push(process.clone());
+    }
+
+    all_processes
+}
