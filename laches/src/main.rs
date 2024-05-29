@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use dirs;
-use laches::{get_active_processes, get_all_processes, LachesStore, Process};
+use laches::{get_active_processes, get_all_processes, LachesStore};
 use std::{
     error::Error,
     fs::{self, File, OpenOptions},
