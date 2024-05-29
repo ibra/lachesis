@@ -78,21 +78,21 @@ fn main() {
 
 fn load_or_create_store(
     store_name: &str,
-    file_path: &PathBuf,
+    store_path: &PathBuf,
 ) -> Result<LachesStore, Box<dyn Error>> {
-    if !&file_path.join(store_name).exists() {
-        fs::create_dir_all(&file_path).expect("error: failed to create directories");
+    if !&store_path.join(store_name).exists() {
+        fs::create_dir_all(&store_path).expect("error: failed to create directories");
 
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
-            .open(&file_path.join(store_name))?;
+            .open(&store_path.join(store_name))?;
 
         let laches_store = serde_json::to_string(&LachesStore::default())?;
         file.write_all(laches_store.as_bytes())?;
     }
 
-    let file = File::open(&file_path.join(store_name))?;
+    let file = File::open(&store_path.join(store_name))?;
     let reader = BufReader::new(file);
     let laches_store = serde_json::from_reader(reader)?;
 
