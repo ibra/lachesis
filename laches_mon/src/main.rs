@@ -1,11 +1,26 @@
 use laches::LachesStore;
 use std::{
-    env, thread,
+    env,
+    fs::OpenOptions,
+    io::{BufReader, Write},
+    thread,
     time::{Duration, Instant},
 };
 
-fn tick(store_path: &str, update_interval: &Duration) {
-    println!("watching: {}", store_path);
+fn tick(store_path: &str, update_interval: &Duration) -> Result<(), std::io::Error> {
+    let mut file = OpenOptions::new().write(true).open(&store_path).unwrap();
+
+    let reader = BufReader::new(&file);
+    let mut store: LachesStore = serde_json::from_reader(reader).unwrap();
+
+    for process in &mut store.process_information {
+        process.uptime += update_interval.as_millis() as u64;
+    }
+
+    let serialized_store = serde_json::to_string(&store).unwrap();
+    file.write_all(serialized_store.as_bytes())?;
+
+    Ok(())
 }
 
 fn main() {
@@ -33,7 +48,8 @@ fn main() {
     loop {
         let elapsed = last_tick.elapsed();
         if elapsed >= update_interval {
-            tick(&file_path, &update_interval);
+            tick(&file_path, &update_interval)
+                .expect("error: error occured while monitoring windows");
             last_tick = Instant::now();
         }
         thread::sleep(Duration::from_millis(1));
