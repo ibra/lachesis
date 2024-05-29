@@ -1,3 +1,3 @@
-# lachesis
+## lachesis (la·kuh·suhs)
 
-lightweight &amp; powerful time-tracking for windows
+lightweight &amp; powerful time-tracking application
