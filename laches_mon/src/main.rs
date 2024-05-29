@@ -8,16 +8,16 @@ use std::{
 };
 
 fn tick(store_path: &str, update_interval: &Duration) -> Result<(), std::io::Error> {
-    let mut file = OpenOptions::new().write(true).open(&store_path).unwrap();
+    let mut file = OpenOptions::new().write(true).open(&store_path)?;
 
     let reader = BufReader::new(&file);
-    let mut store: LachesStore = serde_json::from_reader(reader).unwrap();
+    let mut store: LachesStore = serde_json::from_reader(reader)?;
 
     for process in &mut store.process_information {
         process.uptime += update_interval.as_millis() as u64;
     }
 
-    let serialized_store = serde_json::to_string(&store).unwrap();
+    let serialized_store = serde_json::to_string(&store)?;
     file.write_all(serialized_store.as_bytes())?;
 
     Ok(())
