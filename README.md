@@ -1,3 +1,2 @@
 ## lachesis (la·kuh·suhs)
-
-lightweight &amp; powerful time-tracking application
+lightweight &amp; powerful time-tracking program
