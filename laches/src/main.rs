@@ -76,6 +76,7 @@ fn main() {
             println!("warn: command not yet implemented");
         }
 
+        //todo: this command should have some sort of confirmation
         Commands::Reset {} => {
             reset_store(STORE_NAME, &store_path).expect("error: failed to reset store file")
         }
