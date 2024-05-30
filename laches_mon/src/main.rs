@@ -3,6 +3,7 @@ use std::{
     env,
     fs::File,
     io::{BufReader, Write},
+    os::windows::process,
     path::Path,
     thread,
     time::{Duration, Instant},
@@ -16,6 +17,22 @@ fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Er
 
     for process in &mut r_store.process_information {
         process.uptime += update_interval.as_millis() as u64;
+    }
+
+    // todo: title comparison could have potential clashes
+    for active_process in get_active_processes() {
+        let mut found: bool = false;
+
+        for stored_process in &r_store.process_information {
+            if active_process.title == stored_process.title {
+                found = true;
+                break;
+            }
+        }
+
+        if !found {
+            r_store.process_information.push(active_process);
+        }
     }
 
     let serialized_store = serde_json::to_string(&r_store)?;
