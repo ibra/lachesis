@@ -22,6 +22,7 @@ enum Commands {
     Start {},
     Stop {},
     List {},
+    Reset {},
 }
 
 const STORE_NAME: &str = "store.json";
@@ -66,12 +67,17 @@ fn main() {
             }
 
             if all_windows.is_empty() {
-                println!("warning: no monitored windows.")
+                println!("warning: no monitored windows")
             }
         }
 
         Commands::Stop {} => {
             println!("info: attempting to kill daemon");
+            println!("warn: command not yet implemented");
+        }
+
+        Commands::Reset {} => {
+            reset_store(STORE_NAME, &store_path).expect("error: failed to reset store file")
         }
     }
 }
@@ -89,6 +95,7 @@ fn load_or_create_store(
             .open(&store_path.join(store_name))?;
 
         let laches_store = serde_json::to_string(&LachesStore::default())?;
+        println!("info: created default configuration file");
         file.write_all(laches_store.as_bytes())?;
     }
 
@@ -97,4 +104,12 @@ fn load_or_create_store(
     let laches_store = serde_json::from_reader(reader)?;
 
     Ok(laches_store)
+}
+
+fn reset_store(store_name: &str, store_path: &PathBuf) -> std::io::Result<()> {
+    fs::remove_file(store_path.join(store_name))?;
+    load_or_create_store(store_name, store_path)
+        .expect("error: failed to create default config file");
+
+    Ok(())
 }
