@@ -1,7 +1,7 @@
-use laches::LachesStore;
+use laches::{get_active_processes, LachesStore};
 use std::{
     env,
-    fs::OpenOptions,
+    fs::File,
     io::{BufReader, Write},
     path::Path,
     thread,
@@ -9,21 +9,23 @@ use std::{
 };
 
 fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Error> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open(&store_path)?;
+    let file = File::open(&store_path)?;
 
     let reader = BufReader::new(&file);
-    let mut store: LachesStore = serde_json::from_reader(reader)?;
+    let mut r_store: LachesStore = serde_json::from_reader(reader)?;
 
-    for process in &mut store.process_information {
+    for process in &mut r_store.process_information {
         process.uptime += update_interval.as_millis() as u64;
     }
 
-    let serialized_store = serde_json::to_string(&store)?;
-    file.write_all(serialized_store.as_bytes())?;
+    let serialized_store = serde_json::to_string(&r_store)?;
 
+    let mut w_store = match File::create(&store_path) {
+        Err(err) => panic!("error: couldn't write to file: {}", err),
+        Ok(file) => file,
+    };
+
+    w_store.write_all(serialized_store.as_bytes())?;
     Ok(())
 }
 
