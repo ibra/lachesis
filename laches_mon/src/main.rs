@@ -3,12 +3,16 @@ use std::{
     env,
     fs::OpenOptions,
     io::{BufReader, Write},
+    path::Path,
     thread,
     time::{Duration, Instant},
 };
 
-fn tick(store_path: &str, update_interval: &Duration) -> Result<(), std::io::Error> {
-    let mut file = OpenOptions::new().write(true).open(&store_path)?;
+fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Error> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(&store_path)?;
 
     let reader = BufReader::new(&file);
     let mut store: LachesStore = serde_json::from_reader(reader)?;
@@ -42,14 +46,14 @@ fn main() {
         }
     };
 
-    let file_path = args[2].as_str(); //todo: no validation of whether the path is actually in a valid form
+    let file_path = Path::new(args[2].as_str()); //todo: no validation of whether the path is actually in a valid form
     let mut last_tick = Instant::now();
 
     loop {
         let elapsed = last_tick.elapsed();
         if elapsed >= update_interval {
             tick(&file_path, &update_interval)
-                .expect("error: error occured while monitoring windows");
+                .expect("error: daemon failed while monitoring windows");
             last_tick = Instant::now();
         }
         thread::sleep(Duration::from_millis(1));
