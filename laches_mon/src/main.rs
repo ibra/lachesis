@@ -3,7 +3,6 @@ use std::{
     env,
     fs::File,
     io::{BufReader, Write},
-    os::windows::process,
     path::Path,
     thread,
     time::{Duration, Instant},
@@ -15,16 +14,13 @@ fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Er
     let reader = BufReader::new(&file);
     let mut r_store: LachesStore = serde_json::from_reader(reader)?;
 
-    for process in &mut r_store.process_information {
-        process.uptime += update_interval.as_millis() as u64;
-    }
-
     // todo: title comparison could have potential clashes
     for active_process in get_active_processes() {
         let mut found: bool = false;
 
-        for stored_process in &r_store.process_information {
+        for stored_process in &mut r_store.process_information {
             if active_process.title == stored_process.title {
+                stored_process.uptime += update_interval.as_millis() as u64;
                 found = true;
                 break;
             }
