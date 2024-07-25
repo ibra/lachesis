@@ -91,6 +91,7 @@ fn load_or_create_store(
 
         let mut file = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .write(true)
             .open(store_path.join(store_name))?;
 

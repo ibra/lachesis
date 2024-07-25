@@ -28,7 +28,7 @@ pub fn get_active_processes() -> Vec<Process> {
     let mut active_processes: Vec<Process> = Vec::new();
     let system = System::new_all();
 
-    for (_pid, process) in system.processes() {
+    for process in system.processes().values() {
         let name = process.name().to_string();
 
         let contains_title = active_processes.iter().any(|window| window.title == name);
