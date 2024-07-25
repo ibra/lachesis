@@ -9,7 +9,7 @@ use std::{
 };
 
 fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Error> {
-    let file = File::open(&store_path)?;
+    let file = File::open(store_path)?;
 
     let reader = BufReader::new(&file);
     let mut r_store: LachesStore = serde_json::from_reader(reader)?;
@@ -33,7 +33,7 @@ fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Er
 
     let serialized_store = serde_json::to_string(&r_store)?;
 
-    let mut w_store = match File::create(&store_path) {
+    let mut w_store = match File::create(store_path) {
         Err(err) => panic!("error: couldn't write to file: {}", err),
         Ok(file) => file,
     };
@@ -67,7 +67,7 @@ fn main() {
     loop {
         let elapsed = last_tick.elapsed();
         if elapsed >= update_interval {
-            tick(&file_path, &update_interval)
+            tick(file_path, &update_interval)
                 .expect("error: daemon failed while monitoring windows");
             last_tick = Instant::now();
         }
