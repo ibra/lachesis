@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use sysinfo::System;
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct Process {
@@ -25,12 +26,10 @@ impl Default for LachesStore {
 
 pub fn get_active_processes() -> Vec<Process> {
     let mut active_processes: Vec<Process> = Vec::new();
+    let system = System::new_all();
 
-    for process in unsafe { tasklist::Tasklist::new() } {
-        let name = match process.get_file_info().get("ProductName") {
-            Some(h) => h.to_string(),
-            None => "".to_string(),
-        };
+    for (pid, process) in system.processes() {
+        let name = process.name().to_string();
 
         let contains_title = active_processes.iter().any(|window| window.title == name);
 
@@ -40,7 +39,7 @@ pub fn get_active_processes() -> Vec<Process> {
 
         active_processes.push(Process {
             title: name,
-            uptime: 0,
+            uptime: process.run_time(),
         });
     }
     active_processes
