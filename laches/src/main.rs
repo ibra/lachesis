@@ -18,10 +18,10 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Autostart { toggle: String },
-    Start {},
-    Stop {},
-    List {},
-    Reset {},
+    Start,
+    Stop,
+    List,
+    Reset,
 }
 
 const STORE_NAME: &str = "store.json";
