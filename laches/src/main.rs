@@ -3,7 +3,7 @@ use laches::{get_active_processes, get_all_processes, LachesStore};
 use std::{
     error::Error,
     fs::{self, File, OpenOptions},
-    io::{BufReader, Write},
+    io::{self, BufReader, Write},
     path::PathBuf,
 };
 
@@ -75,11 +75,24 @@ fn main() {
             println!("warn: command not yet implemented");
         }
 
-        //todo: this command should have some sort of confirmation
         Commands::Reset {} => {
-            reset_store(STORE_NAME, &store_path).expect("error: failed to reset store file")
+            if confirm("are you sure you want to wipe the current store? [y/N]") {
+                reset_store(STORE_NAME, &store_path).expect("error: failed to reset store file");
+            } else {
+                println!("info: aborted reset operation");
+            }
         }
     }
+}
+
+fn confirm(prompt: &str) -> bool {
+    print!("{}", prompt);
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+
+    matches!(input.trim().to_lowercase().as_str(), "y" | "yes")
 }
 
 fn load_or_create_store(
