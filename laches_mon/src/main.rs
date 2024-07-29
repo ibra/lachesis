@@ -53,9 +53,9 @@ fn main() {
     println!("info: running daemon (laches_mon)...");
 
     let update_interval: Duration = match args[1].parse() {
-        Ok(num) => Duration::from_millis(num),
-        Err(_) => {
-            eprintln!("error: invalid argument(s) provided");
+        Ok(num) => Duration::from_secs(num),
+        Err(err) => {
+            eprintln!("error: {}", err);
             eprintln!("usage: laches_mon <update_interval>");
             return;
         }
@@ -74,6 +74,6 @@ fn main() {
                 .expect("error: daemon failed while monitoring windows");
             last_tick = Instant::now();
         }
-        thread::sleep(Duration::from_millis(1));
+        thread::sleep(update_interval);
     }
 }

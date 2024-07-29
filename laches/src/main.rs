@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use laches::{get_active_processes, get_all_processes, LachesStore};
+use laches::{get_active_processes, get_stored_processes, LachesStore};
 use std::{
     error::Error,
     fs::{self, File, OpenOptions},
@@ -60,7 +60,7 @@ fn main() {
         }
 
         Commands::List {} => {
-            let all_windows = get_all_processes(&laches_store);
+            let all_windows = get_stored_processes(&laches_store);
             for window in &all_windows {
                 println!("{} | {} seconds", window.title, window.uptime);
             }
