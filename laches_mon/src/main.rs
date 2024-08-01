@@ -14,7 +14,7 @@ fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Er
     let reader = BufReader::new(&file);
     let mut r_store: LachesStore = serde_json::from_reader(reader)?;
 
-    // todo: title comparison could have potential clashes
+    // todo: avoid clashes with process name comparison (compare PID's for active)
     for active_process in get_active_processes() {
         let mut found: bool = false;
 

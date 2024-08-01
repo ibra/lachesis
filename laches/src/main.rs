@@ -26,18 +26,22 @@ enum Commands {
 
 const STORE_NAME: &str = "store.json";
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     use std::process::Command;
-
-    let cli = Cli::parse();
-    let mut monitor = Command::new("laches_mon");
 
     let store_path = dirs::config_dir().unwrap().join("lachesis");
 
-    let laches_store = match load_or_create_store(STORE_NAME, &store_path) {
+    let mut laches_store = match load_or_create_store(STORE_NAME, &store_path) {
         Ok(laches_store) => laches_store,
         Err(error) => panic!("error: failed to load config file: {}", error),
     };
+
+    let cli = Cli::parse();
+
+    let mut monitor = Command::new("laches_mon");
+    monitor
+        .arg(&laches_store.update_interval.to_string())
+        .arg(&store_path.join(STORE_NAME));
 
     match &cli.command {
         Commands::Autostart { toggle } => {
@@ -52,11 +56,12 @@ fn main() {
             let active_windows = get_active_processes();
             println!("started monitoring {} windows", &active_windows.len());
 
-            monitor
-                .arg(&laches_store.update_interval.to_string())
-                .arg(&store_path.join(STORE_NAME))
+            let instance = monitor
                 .spawn()
                 .expect("error: failed to execute laches_mon (monitoring daemon)");
+
+            laches_store.daemon_pid = instance.id();
+            save_store(&laches_store, STORE_NAME, &store_path)?;
         }
 
         Commands::List {} => {
@@ -66,13 +71,16 @@ fn main() {
             }
 
             if all_windows.is_empty() {
-                println!("warning: no monitored windows")
+                println!("warning: no monitored windows");
             }
         }
 
         Commands::Stop {} => {
-            println!("info: attempting to kill daemon");
-            println!("warn: command not yet implemented");
+            if confirm("are you sure you want to stop window tracking (kill daemon)? [y/N]") {
+                println!("info: attempting to kill daemon");
+            } else {
+                println!("info: aborted stop operation");
+            }
         }
 
         Commands::Reset {} => {
@@ -83,6 +91,8 @@ fn main() {
             }
         }
     }
+
+    Ok(())
 }
 
 fn confirm(prompt: &str) -> bool {
@@ -93,6 +103,20 @@ fn confirm(prompt: &str) -> bool {
     io::stdin().read_line(&mut input).unwrap();
 
     matches!(input.trim().to_lowercase().as_str(), "y" | "yes")
+}
+
+fn save_store(
+    store: &LachesStore,
+    store_name: &str,
+    store_path: &PathBuf,
+) -> Result<(), Box<dyn Error>> {
+    let file_path = store_path.join(store_name);
+    let mut file = File::create(&file_path)?;
+
+    let laches_store = serde_json::to_string(store)?;
+    file.write_all(laches_store.as_bytes())?;
+
+    Ok(())
 }
 
 fn load_or_create_store(
