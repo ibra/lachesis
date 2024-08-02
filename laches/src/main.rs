@@ -4,7 +4,7 @@ use std::{
     error::Error,
     fs::{self, File, OpenOptions},
     io::{self, BufReader, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 #[derive(Parser)]
@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let store_path = dirs::config_dir().unwrap().join("lachesis");
 
-    let mut laches_store = match load_or_create_store(STORE_NAME, &store_path) {
+    let mut laches_store = match load_or_create_store(&store_path) {
         Ok(laches_store) => laches_store,
         Err(error) => panic!("error: failed to load config file: {}", error),
     };
@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .expect("error: failed to execute laches_mon (monitoring daemon)");
 
             laches_store.daemon_pid = instance.id();
-            save_store(&laches_store, STORE_NAME, &store_path)?;
+            save_store(&laches_store, &store_path)?;
         }
 
         Commands::List {} => {
@@ -85,7 +85,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         Commands::Reset {} => {
             if confirm("are you sure you want to wipe the current store? [y/N]") {
-                reset_store(STORE_NAME, &store_path).expect("error: failed to reset store file");
+                reset_store(&store_path).expect("error: failed to reset store file");
             } else {
                 println!("info: aborted reset operation");
             }
@@ -105,13 +105,9 @@ fn confirm(prompt: &str) -> bool {
     matches!(input.trim().to_lowercase().as_str(), "y" | "yes")
 }
 
-fn save_store(
-    store: &LachesStore,
-    store_name: &str,
-    store_path: &PathBuf,
-) -> Result<(), Box<dyn Error>> {
-    let file_path = store_path.join(store_name);
-    let mut file = File::create(&file_path)?;
+fn save_store(store: &LachesStore, store_path: &Path) -> Result<(), Box<dyn Error>> {
+    let file_path = store_path.join(STORE_NAME);
+    let mut file = File::create(file_path)?;
 
     let laches_store = serde_json::to_string(store)?;
     file.write_all(laches_store.as_bytes())?;
@@ -119,35 +115,31 @@ fn save_store(
     Ok(())
 }
 
-fn load_or_create_store(
-    store_name: &str,
-    store_path: &PathBuf,
-) -> Result<LachesStore, Box<dyn Error>> {
-    if !&store_path.join(store_name).exists() {
+fn load_or_create_store(store_path: &PathBuf) -> Result<LachesStore, Box<dyn Error>> {
+    if !&store_path.join(STORE_NAME).exists() {
         fs::create_dir_all(store_path).expect("error: failed to create directories");
 
         let mut file = OpenOptions::new()
             .create(true)
             .truncate(false)
             .write(true)
-            .open(store_path.join(store_name))?;
+            .open(store_path.join(STORE_NAME))?;
 
         let laches_store = serde_json::to_string(&LachesStore::default())?;
         println!("info: created default configuration file");
         file.write_all(laches_store.as_bytes())?;
     }
 
-    let file = File::open(store_path.join(store_name))?;
+    let file = File::open(store_path.join(STORE_NAME))?;
     let reader = BufReader::new(file);
     let laches_store = serde_json::from_reader(reader)?;
 
     Ok(laches_store)
 }
 
-fn reset_store(store_name: &str, store_path: &PathBuf) -> std::io::Result<()> {
-    fs::remove_file(store_path.join(store_name))?;
-    load_or_create_store(store_name, store_path)
-        .expect("error: failed to create default config file");
+fn reset_store(store_path: &PathBuf) -> std::io::Result<()> {
+    fs::remove_file(store_path.join(STORE_NAME))?;
+    load_or_create_store(store_path).expect("error: failed to create default config file");
 
     Ok(())
 }
