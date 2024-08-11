@@ -65,7 +65,7 @@ fn main() {
     let file_path = Path::new(args[2].as_str());
     let mut last_tick = Instant::now();
 
-    println!("writing information to file: {}", file_path.display());
+    //println!("writing information to file: {}", file_path.display());
 
     loop {
         let elapsed = last_tick.elapsed();
