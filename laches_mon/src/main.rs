@@ -20,7 +20,7 @@ fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Er
 
         for stored_process in &mut r_store.process_information {
             if active_process.title == stored_process.title {
-                stored_process.uptime += update_interval.as_millis() as u64;
+                stored_process.uptime += update_interval.as_secs();
                 found = true;
                 break;
             }
