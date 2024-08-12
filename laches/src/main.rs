@@ -6,6 +6,7 @@ use std::{
     io::{self, BufReader, Write},
     path::{Path, PathBuf},
 };
+use tabled::{builder::Builder, settings::Style, Table};
 
 #[derive(Parser)]
 #[command(author, version)]
@@ -66,9 +67,19 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         Commands::List {} => {
             let all_windows = get_stored_processes(&laches_store);
+
+            let mut builder = Builder::default();
+
+            builder.push_record(["Window", "Usage Time"]);
+
             for window in &all_windows {
-                println!("{} | {} seconds", window.title, window.uptime);
+                builder.push_record([&window.title, &format!("{0} seconds", window.uptime)]);
             }
+
+            let mut table = builder.build();
+            table.with(Style::rounded());
+
+            print!("{}", table);
 
             if all_windows.is_empty() {
                 println!("warning: no monitored windows");

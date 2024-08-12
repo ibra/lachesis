@@ -2,8 +2,9 @@ use std::u32;
 
 use serde::{Deserialize, Serialize};
 use sysinfo::System;
+use tabled::Tabled;
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Tabled)]
 pub struct Process {
     pub title: String,
     pub uptime: u64,

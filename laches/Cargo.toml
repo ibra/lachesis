@@ -10,3 +10,4 @@ dirs = "5.0.1"
 sysinfo = "0.30.13"
 serde.workspace = true
 serde_json.workspace = true
+tabled = "0.16.0"
