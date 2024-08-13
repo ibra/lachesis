@@ -3,6 +3,7 @@ use std::{
     env,
     fs::File,
     io::{BufReader, Write},
+    panic,
     path::Path,
     thread,
     time::{Duration, Instant},
@@ -14,7 +15,6 @@ fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Er
     let reader = BufReader::new(&file);
     let mut r_store: LachesStore = serde_json::from_reader(reader)?;
 
-    // todo: avoid clashes with process name comparison (compare PID's for active)
     for active_process in get_active_processes() {
         let mut found: bool = false;
 
@@ -59,8 +59,16 @@ fn main() {
         }
     };
 
-    //todo: no validation of whether the path is actually in a valid form
     let file_path = Path::new(args[2].as_str());
+
+    if !file_path.exists() {
+        println!(
+            "error: store file does not exist at location:  \"{0}\"",
+            &file_path.display()
+        );
+        std::process::exit(1);
+    }
+
     let mut last_tick = Instant::now();
 
     loop {
