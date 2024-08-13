@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         Commands::Start {} => {
             let active_windows = get_active_processes();
-            println!("started monitoring {} windows", &active_windows.len());
+            println!("info: started monitoring {} windows", &active_windows.len());
 
             let instance = monitor
                 .spawn()

@@ -50,8 +50,6 @@ fn main() {
         return;
     }
 
-    println!("info: running daemon (laches_mon)...");
-
     let update_interval: Duration = match args[1].parse() {
         Ok(num) => Duration::from_secs(num),
         Err(err) => {
