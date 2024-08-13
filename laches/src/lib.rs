@@ -1,5 +1,3 @@
-use std::u32;
-
 use serde::{Deserialize, Serialize};
 use sysinfo::System;
 use tabled::Tabled;
