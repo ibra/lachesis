@@ -6,7 +6,8 @@ use std::{
     io::{self, BufReader, Write},
     path::{Path, PathBuf},
 };
-use tabled::{builder::Builder, settings::Style, Table};
+use sysinfo::{Pid, System};
+use tabled::{builder::Builder, settings::Style};
 
 #[derive(Parser)]
 #[command(author, version)]
@@ -86,8 +87,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         Commands::Stop {} => {
-            if confirm("are you sure you want to stop window tracking (kill daemon)? [y/N]") {
-                println!("info: attempting to kill daemon");
+            if confirm("are you sure you want to stop window tracking (kill laches_mon)? [y/N]") {
+                let s = System::new_all();
+                if let Some(process) = s.process(Pid::from(laches_store.daemon_pid as usize)) {
+                    process.kill();
+                }
+                println!("info: killed laches_mon (monitoring daemon)");
             } else {
                 println!("info: aborted stop operation");
             }
