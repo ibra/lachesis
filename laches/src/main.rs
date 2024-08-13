@@ -67,13 +67,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         Commands::List {} => {
             let all_windows = get_stored_processes(&laches_store);
-
             let mut builder = Builder::default();
 
             builder.push_record(["Window", "Usage Time"]);
 
             for window in &all_windows {
-                builder.push_record([&window.title, &format!("{0} seconds", window.uptime)]);
+                builder.push_record([&window.title, &format_uptime(window.uptime)]);
             }
 
             let mut table = builder.build();
@@ -104,6 +103,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+fn format_uptime(seconds: u64) -> String {
+    let days = seconds / 86400;
+    let hours = (seconds % 86400) / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let seconds = seconds % 60;
+
+    if days > 0 {
+        format!("{}d {}h {}m {}s", days, hours, minutes, seconds)
+    } else if hours > 0 {
+        format!("{}h {}m {}s", hours, minutes, seconds)
+    } else if minutes > 0 {
+        format!("{}m {}s", minutes, seconds)
+    } else {
+        format!("{}s", seconds)
+    }
 }
 
 fn confirm(prompt: &str) -> bool {
