@@ -1,5 +1,6 @@
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use laches::{
+    cli::{Cli, Commands},
     get_active_processes, get_stored_processes,
     utils::{confirm, format_uptime},
     LachesStore,
@@ -12,23 +13,6 @@ use std::{
 };
 use sysinfo::{Pid, System};
 use tabled::{builder::Builder, settings::Style};
-
-#[derive(Parser)]
-#[command(author, version)]
-#[command(propagate_version = true)]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    Autostart { toggle: String },
-    Start,
-    Stop,
-    List,
-    Reset,
-}
 
 const STORE_NAME: &str = "store.json";
 

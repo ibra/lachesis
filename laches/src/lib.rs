@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod utils;
 
 use serde::{Deserialize, Serialize};
