@@ -1,3 +1,5 @@
+pub mod utils;
+
 use serde::{Deserialize, Serialize};
 use sysinfo::System;
 use tabled::Tabled;
