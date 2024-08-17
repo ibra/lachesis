@@ -1,12 +1,11 @@
 use clap::Parser;
 use laches::{
     cli::{Cli, Commands},
-    process::get_active_processes,
-    store::{get_stored_processes, load_or_create_store, reset_store, save_store, STORE_NAME},
+    process::{start_monitoring, stop_monitoring},
+    store::{get_stored_processes, load_or_create_store, reset_store, LachesStore, STORE_NAME},
     utils::{confirm, format_uptime},
 };
 use std::error::Error;
-use sysinfo::{Pid, System};
 use tabled::{builder::Builder, settings::Style};
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -27,69 +26,56 @@ fn main() -> Result<(), Box<dyn Error>> {
         .arg(&store_path.join(STORE_NAME));
 
     match &cli.command {
-        Commands::Autostart { toggle } => {
-            if toggle == "yes" {
-                println!("info: enabled boot on startup.")
-            } else if toggle == "no" {
-                println!("info: disabled boot on startup.")
-            }
-        }
+        Commands::Autostart { toggle } => handle_autostart(toggle),
+        Commands::Start => start_monitoring(&mut laches_store, &store_path),
+        Commands::Stop => stop_monitoring(&mut laches_store),
+        Commands::List => list_windows(&laches_store),
+        Commands::Reset => confirm_reset_store(&store_path),
+    }?;
 
-        Commands::Start {} => {
-            let active_windows = get_active_processes();
-            println!("info: started monitoring {} windows", &active_windows.len());
+    Ok(())
+}
 
-            let instance = monitor
-                .spawn()
-                .expect("error: failed to execute laches_mon (monitoring daemon)");
+fn confirm_reset_store(store_path: &std::path::PathBuf) -> Result<(), Box<dyn Error>> {
+    if confirm("are you sure you want to wipe the current store? [y/N]") {
+        reset_store(&store_path).expect("error: failed to reset store file");
+    } else {
+        println!("info: aborted reset operation");
+    }
 
-            laches_store.daemon_pid = instance.id();
-            save_store(&laches_store, &store_path)?;
-        }
+    Ok(())
+}
 
-        Commands::List {} => {
-            // todo: add blacklisting/whitelisting
-            let all_windows = get_stored_processes(&laches_store);
-            let mut builder = Builder::default();
+fn handle_autostart(toggle: &str) -> Result<(), Box<dyn Error>> {
+    match toggle {
+        "yes" => println!("info: enabled boot on startup."),
+        "no" => println!("info: disabled boot on startup."),
+        _ => println!("error: invalid option for autostart. Use 'yes' or 'no'."),
+    }
+    todo!("info: command not yet implemented.")
+}
 
-            let mut sorted_windows = all_windows.clone();
-            sorted_windows.sort_by_key(|window| std::cmp::Reverse(window.uptime));
+// todo: blacklisting/whitelisting, categories, tagging
+fn list_windows(laches_store: &LachesStore) -> Result<(), Box<dyn Error>> {
+    let all_windows = get_stored_processes(&laches_store);
+    let mut builder = Builder::default();
 
-            builder.push_record(["Process Name", "Usage Time"]);
+    let mut sorted_windows = all_windows.clone();
+    sorted_windows.sort_by_key(|window| std::cmp::Reverse(window.uptime));
 
-            for window in &sorted_windows {
-                builder.push_record([&window.title, &format_uptime(window.uptime)]);
-            }
+    builder.push_record(["Process Name", "Usage Time"]);
 
-            let mut table = builder.build();
-            table.with(Style::rounded());
+    for window in &sorted_windows {
+        builder.push_record([&window.title, &format_uptime(window.uptime)]);
+    }
 
-            print!("{}", table);
+    let mut table = builder.build();
+    table.with(Style::rounded());
 
-            if all_windows.is_empty() {
-                println!("warning: no monitored windows");
-            }
-        }
+    print!("{}", table);
 
-        Commands::Stop {} => {
-            if confirm("are you sure you want to stop window tracking (kill laches_mon)? [y/N]") {
-                let s = System::new_all();
-                if let Some(process) = s.process(Pid::from(laches_store.daemon_pid as usize)) {
-                    process.kill();
-                }
-                println!("info: killed laches_mon (monitoring daemon)");
-            } else {
-                println!("info: aborted stop operation");
-            }
-        }
-
-        Commands::Reset {} => {
-            if confirm("are you sure you want to wipe the current store? [y/N]") {
-                reset_store(&store_path).expect("error: failed to reset store file");
-            } else {
-                println!("info: aborted reset operation");
-            }
-        }
+    if all_windows.is_empty() {
+        println!("warning: no monitored windows");
     }
 
     Ok(())
