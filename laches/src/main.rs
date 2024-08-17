@@ -9,12 +9,15 @@ use std::{error::Error, process::Command};
 use tabled::{builder::Builder, settings::Style};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let store_path = dirs::config_dir().unwrap().join("lachesis");
+    let store_path = match dirs::config_dir() {
+        Some(dir) => dir.join("lachesis"),
+        None => return Err("error: failed to get configuration directory".into()),
+    };
     let mut laches_store = load_or_create_store(&store_path)?;
 
-    let cli = Cli::parse();
-
     configure_daemon(&laches_store, &store_path);
+
+    let cli = Cli::parse();
 
     match &cli.command {
         Commands::Autostart { toggle } => handle_autostart(toggle),
