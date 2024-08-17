@@ -67,12 +67,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         Commands::List {} => {
+            // todo: add blacklisting/whitelisting
             let all_windows = get_stored_processes(&laches_store);
             let mut builder = Builder::default();
 
-            builder.push_record(["Window", "Usage Time"]);
+            let mut sorted_windows = all_windows.clone();
+            sorted_windows.sort_by_key(|window| std::cmp::Reverse(window.uptime));
 
-            for window in &all_windows {
+            builder.push_record(["Process Name", "Usage Time"]);
+
+            for window in &sorted_windows {
                 builder.push_record([&window.title, &format_uptime(window.uptime)]);
             }
 
