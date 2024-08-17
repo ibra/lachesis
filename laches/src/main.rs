@@ -5,25 +5,16 @@ use laches::{
     store::{get_stored_processes, load_or_create_store, reset_store, LachesStore, STORE_NAME},
     utils::{confirm, format_uptime},
 };
-use std::error::Error;
+use std::{error::Error, process::Command};
 use tabled::{builder::Builder, settings::Style};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    use std::process::Command;
-
     let store_path = dirs::config_dir().unwrap().join("lachesis");
-
-    let mut laches_store = match load_or_create_store(&store_path) {
-        Ok(laches_store) => laches_store,
-        Err(error) => panic!("error: failed to load config file: {}", error),
-    };
+    let mut laches_store = load_or_create_store(&store_path)?;
 
     let cli = Cli::parse();
 
-    let mut monitor = Command::new("laches_mon");
-    monitor
-        .arg(&laches_store.update_interval.to_string())
-        .arg(&store_path.join(STORE_NAME));
+    configure_daemon(&laches_store, &store_path);
 
     match &cli.command {
         Commands::Autostart { toggle } => handle_autostart(toggle),
@@ -34,6 +25,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     }?;
 
     Ok(())
+}
+
+fn configure_daemon(laches_store: &LachesStore, store_path: &std::path::PathBuf) {
+    let mut monitor = Command::new("laches_mon");
+    monitor
+        .arg(&laches_store.update_interval.to_string())
+        .arg(&store_path.join(STORE_NAME));
 }
 
 fn confirm_reset_store(store_path: &std::path::PathBuf) -> Result<(), Box<dyn Error>> {
