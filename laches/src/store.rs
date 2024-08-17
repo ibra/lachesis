@@ -25,3 +25,13 @@ impl Default for LachesStore {
         }
     }
 }
+
+pub fn get_stored_processes(laches_config: &LachesStore) -> Vec<Process> {
+    let mut stored_processes: Vec<Process> = Vec::new();
+
+    for process in &laches_config.process_information {
+        stored_processes.push(process.clone());
+    }
+
+    stored_processes
+}
