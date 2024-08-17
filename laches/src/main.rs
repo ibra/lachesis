@@ -2,19 +2,12 @@ use clap::Parser;
 use laches::{
     cli::{Cli, Commands},
     process::get_active_processes,
-    store::{get_stored_processes, LachesStore},
+    store::{get_stored_processes, load_or_create_store, reset_store, save_store, STORE_NAME},
     utils::{confirm, format_uptime},
 };
-use std::{
-    error::Error,
-    fs::{self, File, OpenOptions},
-    io::{BufReader, Write},
-    path::{Path, PathBuf},
-};
+use std::error::Error;
 use sysinfo::{Pid, System};
 use tabled::{builder::Builder, settings::Style};
-
-const STORE_NAME: &str = "store.json";
 
 fn main() -> Result<(), Box<dyn Error>> {
     use std::process::Command;
@@ -98,45 +91,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
-
-    Ok(())
-}
-
-fn save_store(store: &LachesStore, store_path: &Path) -> Result<(), Box<dyn Error>> {
-    let file_path = store_path.join(STORE_NAME);
-    let mut file = File::create(file_path)?;
-
-    let laches_store = serde_json::to_string(store)?;
-    file.write_all(laches_store.as_bytes())?;
-
-    Ok(())
-}
-
-fn load_or_create_store(store_path: &PathBuf) -> Result<LachesStore, Box<dyn Error>> {
-    if !&store_path.join(STORE_NAME).exists() {
-        fs::create_dir_all(store_path).expect("error: failed to create directories");
-
-        let mut file = OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(store_path.join(STORE_NAME))?;
-
-        let laches_store = serde_json::to_string(&LachesStore::default())?;
-        println!("info: created default configuration file");
-        file.write_all(laches_store.as_bytes())?;
-    }
-
-    let file = File::open(store_path.join(STORE_NAME))?;
-    let reader = BufReader::new(file);
-    let laches_store = serde_json::from_reader(reader)?;
-
-    Ok(laches_store)
-}
-
-fn reset_store(store_path: &PathBuf) -> std::io::Result<()> {
-    fs::remove_file(store_path.join(STORE_NAME))?;
-    load_or_create_store(store_path).expect("error: failed to create default config file");
 
     Ok(())
 }
