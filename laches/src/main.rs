@@ -1,9 +1,9 @@
 use clap::Parser;
 use laches::{
     cli::{Cli, Commands},
-    get_active_processes, get_stored_processes,
+    process::{get_active_processes, get_stored_processes},
+    store::LachesStore,
     utils::{confirm, format_uptime},
-    LachesStore,
 };
 use std::{
     error::Error,

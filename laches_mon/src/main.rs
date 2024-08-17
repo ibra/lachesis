@@ -1,4 +1,3 @@
-use laches::{get_active_processes, LachesStore};
 use std::{
     env,
     fs::File,
@@ -8,6 +7,8 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+
+use laches::{process::get_active_processes, store::LachesStore};
 
 fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Error> {
     let file = File::open(store_path)?;
