@@ -3,7 +3,7 @@ use std::{
     error::Error,
     fs::{self, File, OpenOptions},
     io::{BufReader, Write},
-    path::{Path, PathBuf},
+    path::Path,
 };
 use tabled::Tabled;
 
@@ -54,7 +54,7 @@ pub fn save_store(store: &LachesStore, store_path: &Path) -> Result<(), Box<dyn 
     Ok(())
 }
 
-pub fn load_or_create_store(store_path: &PathBuf) -> Result<LachesStore, Box<dyn Error>> {
+pub fn load_or_create_store(store_path: &Path) -> Result<LachesStore, Box<dyn Error>> {
     if !&store_path.join(STORE_NAME).exists() {
         fs::create_dir_all(store_path).expect("error: failed to create directories");
 
@@ -76,7 +76,7 @@ pub fn load_or_create_store(store_path: &PathBuf) -> Result<LachesStore, Box<dyn
     Ok(laches_store)
 }
 
-pub fn reset_store(store_path: &PathBuf) -> std::io::Result<()> {
+pub fn reset_store(store_path: &Path) -> std::io::Result<()> {
     fs::remove_file(store_path.join(STORE_NAME))?;
     load_or_create_store(store_path).expect("error: failed to create default config file");
 
