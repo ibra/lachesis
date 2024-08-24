@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Autostart { toggle } => handle_autostart(toggle),
         Commands::Start => start_monitoring(&mut laches_store, &store_path),
         Commands::Stop => stop_monitoring(&mut laches_store),
-        Commands::List => list_windows(&laches_store),
+        Commands::List => list_processes(&laches_store),
         Commands::Reset => confirm_reset_store(&store_path),
     }?;
 
@@ -56,8 +56,7 @@ fn handle_autostart(toggle: &str) -> Result<(), Box<dyn Error>> {
     todo!("info: command not yet implemented.")
 }
 
-// todo: blacklisting/whitelisting, categories, tagging
-fn list_windows(laches_store: &LachesStore) -> Result<(), Box<dyn Error>> {
+fn list_processes(laches_store: &LachesStore) -> Result<(), Box<dyn Error>> {
     let all_windows = get_stored_processes(laches_store);
     let mut builder = Builder::default();
 

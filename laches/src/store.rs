@@ -7,6 +7,8 @@ use std::{
 };
 use tabled::Tabled;
 
+use crate::process_list::ProcessListOptions;
+
 pub const STORE_NAME: &str = "store.json";
 
 #[derive(Deserialize, Serialize, Clone, Tabled)]
@@ -21,6 +23,7 @@ pub struct LachesStore {
     pub autostart: bool,      // whether the program runs on startup (yes/no)
     pub update_interval: u64, // how often the list of windows gets updated (seconds)
     pub process_information: Vec<Process>, // vector storing all recorded windows
+    pub process_list_options: ProcessListOptions,
 }
 
 impl Default for LachesStore {
@@ -30,6 +33,7 @@ impl Default for LachesStore {
             update_interval: 1,
             process_information: Vec::new(),
             daemon_pid: u32::MAX,
+            process_list_options: ProcessListOptions::default(),
         }
     }
 }
