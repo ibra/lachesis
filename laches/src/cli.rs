@@ -13,6 +13,7 @@ pub enum Commands {
     Autostart { toggle: String },
     Start,
     Stop,
+    Mode { mode: String },
     List,
     Reset,
 }

@@ -2,6 +2,7 @@ use clap::Parser;
 use laches::{
     cli::{Cli, Commands},
     process::{start_monitoring, stop_monitoring},
+    process_list::ListMode,
     store::{get_stored_processes, load_or_create_store, reset_store, LachesStore, STORE_NAME},
     utils::{confirm, format_uptime},
 };
@@ -23,10 +24,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Autostart { toggle } => handle_autostart(toggle),
         Commands::Start => start_monitoring(&mut laches_store, &store_path),
         Commands::Stop => stop_monitoring(&mut laches_store),
+        Commands::Mode { mode } => set_mode(mode, &mut laches_store),
         Commands::List => list_processes(&laches_store),
         Commands::Reset => confirm_reset_store(&store_path),
     }?;
 
+    Ok(())
+}
+
+fn set_mode(mode: &str, laches_store: &LachesStore) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
@@ -60,12 +66,44 @@ fn list_processes(laches_store: &LachesStore) -> Result<(), Box<dyn Error>> {
     let all_windows = get_stored_processes(laches_store);
     let mut builder = Builder::default();
 
+    println!(
+        "{}",
+        &format!(
+            "Tracked Window Usage ({} Mode)",
+            match laches_store.process_list_options.mode {
+                ListMode::Whitelist => "Whitelist",
+                ListMode::Blacklist => "Blacklist",
+                ListMode::Default => "Default",
+            }
+        )
+    );
+
     let mut sorted_windows = all_windows.clone();
     sorted_windows.sort_by_key(|window| std::cmp::Reverse(window.uptime));
 
     builder.push_record(["Process Name", "Usage Time"]);
 
     for window in &sorted_windows {
+        match laches_store.process_list_options.mode {
+            ListMode::Whitelist => {
+                if let Some(ref whitelist) = laches_store.process_list_options.whitelist {
+                    if !whitelist.contains(&window.title) {
+                        continue;
+                    }
+                }
+            }
+            ListMode::Blacklist => {
+                if let Some(ref blacklist) = laches_store.process_list_options.blacklist {
+                    if blacklist.contains(&window.title) {
+                        continue;
+                    }
+                }
+            }
+            ListMode::Default => {
+                // default mode does no filtering, so process all windows
+            }
+        }
+
         builder.push_record([&window.title, &format_uptime(window.uptime)]);
     }
 
