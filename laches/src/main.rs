@@ -4,7 +4,7 @@ use laches::{
     process::{start_monitoring, stop_monitoring},
     process_list::ListMode,
     store::{
-        self, get_stored_processes, load_or_create_store, reset_store, save_store, LachesStore,
+        get_stored_processes, load_or_create_store, reset_store, save_store, LachesStore,
         STORE_NAME,
     },
     utils::{confirm, format_uptime},
@@ -17,8 +17,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(dir) => dir.join("lachesis"),
         None => return Err("error: failed to get configuration directory".into()),
     };
-    let mut laches_store = load_or_create_store(&store_path)?;
+    std::fs::create_dir_all(&store_path)?;
 
+    let mut laches_store = load_or_create_store(&store_path)?;
     configure_daemon(&laches_store, &store_path);
 
     let cli = Cli::parse();
