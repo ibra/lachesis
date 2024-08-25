@@ -3,7 +3,9 @@ use laches::{
     cli::{Cli, Commands},
     process::{start_monitoring, stop_monitoring},
     process_list::ListMode,
-    store::{get_stored_processes, load_or_create_store, reset_store, LachesStore, STORE_NAME},
+    store::{
+        self, get_stored_processes, load_or_create_store, reset_store, LachesStore, STORE_NAME,
+    },
     utils::{confirm, format_uptime},
 };
 use std::{error::Error, path::Path, process::Command};
@@ -29,11 +31,26 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Reset => confirm_reset_store(&store_path),
     }?;
 
+    store::save_store(&laches_store, &store_path)?;
+
     Ok(())
 }
 
-fn set_mode(mode: &str, laches_store: &LachesStore) -> Result<(), Box<dyn Error>> {
-    Ok(())
+fn set_mode(mode: &str, laches_store: &mut LachesStore) -> Result<(), Box<dyn Error>> {
+    match mode.parse::<ListMode>() {
+        Ok(variant) => {
+            laches_store.process_list_options.mode = variant;
+            println!(
+                "info: mode set to: {}",
+                laches_store.process_list_options.mode.to_str()
+            );
+            Ok(())
+        }
+        Err(_) => {
+            println!("error: match found for mode: {}", mode);
+            Err(Box::new(std::fmt::Error))
+        }
+    }
 }
 
 fn configure_daemon(laches_store: &LachesStore, store_path: &Path) {
