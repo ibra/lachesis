@@ -36,6 +36,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn configure_daemon(laches_store: &LachesStore, store_path: &Path) {
+    let mut monitor = Command::new("laches_mon");
+    monitor
+        .arg(&laches_store.update_interval.to_string())
+        .arg(&store_path.join(STORE_NAME));
+}
+
+fn handle_autostart(toggle: &str) -> Result<(), Box<dyn Error>> {
+    match toggle {
+        "yes" => println!("info: enabled boot on startup."),
+        "no" => println!("info: disabled boot on startup."),
+        _ => println!("error: invalid option for autostart. Use 'yes' or 'no'."),
+    }
+    todo!("info: command not yet implemented.")
+}
+
 fn set_mode(mode: &str, laches_store: &mut LachesStore) -> Result<(), Box<dyn Error>> {
     match mode.parse::<ListMode>() {
         Ok(variant) => {
@@ -51,32 +67,6 @@ fn set_mode(mode: &str, laches_store: &mut LachesStore) -> Result<(), Box<dyn Er
             Err(Box::new(std::fmt::Error))
         }
     }
-}
-
-fn configure_daemon(laches_store: &LachesStore, store_path: &Path) {
-    let mut monitor = Command::new("laches_mon");
-    monitor
-        .arg(&laches_store.update_interval.to_string())
-        .arg(&store_path.join(STORE_NAME));
-}
-
-fn confirm_reset_store(store_path: &Path) -> Result<(), Box<dyn Error>> {
-    if confirm("are you sure you want to wipe the current store? [y/N]") {
-        reset_store(store_path).expect("error: failed to reset store file");
-    } else {
-        println!("info: aborted reset operation");
-    }
-
-    Ok(())
-}
-
-fn handle_autostart(toggle: &str) -> Result<(), Box<dyn Error>> {
-    match toggle {
-        "yes" => println!("info: enabled boot on startup."),
-        "no" => println!("info: disabled boot on startup."),
-        _ => println!("error: invalid option for autostart. Use 'yes' or 'no'."),
-    }
-    todo!("info: command not yet implemented.")
 }
 
 fn list_processes(laches_store: &LachesStore) -> Result<(), Box<dyn Error>> {
@@ -131,6 +121,16 @@ fn list_processes(laches_store: &LachesStore) -> Result<(), Box<dyn Error>> {
 
     if all_windows.is_empty() {
         println!("warning: no monitored windows");
+    }
+
+    Ok(())
+}
+
+fn confirm_reset_store(store_path: &Path) -> Result<(), Box<dyn Error>> {
+    if confirm("are you sure you want to wipe the current store? [y/N]") {
+        reset_store(store_path).expect("error: failed to reset store file");
+    } else {
+        println!("info: aborted reset operation");
     }
 
     Ok(())
