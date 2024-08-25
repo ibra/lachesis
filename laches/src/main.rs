@@ -4,7 +4,8 @@ use laches::{
     process::{start_monitoring, stop_monitoring},
     process_list::ListMode,
     store::{
-        self, get_stored_processes, load_or_create_store, reset_store, LachesStore, STORE_NAME,
+        self, get_stored_processes, load_or_create_store, reset_store, save_store, LachesStore,
+        STORE_NAME,
     },
     utils::{confirm, format_uptime},
 };
@@ -31,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Reset => confirm_reset_store(&store_path),
     }?;
 
-    store::save_store(&laches_store, &store_path)?;
+    save_store(&laches_store, &store_path)?;
 
     Ok(())
 }
