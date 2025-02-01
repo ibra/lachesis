@@ -10,8 +10,7 @@ lachesis is a completely cli-based, customizable, automatic time tracking tool d
 - **customizable rules**: set up rules for tracking or ignoring specific programs. (!! regex support planned)
 - **backups**: ability to create backups of your tracking data.
 - **export options**: easily export time tracking data in multiple formats (csv, json etc.).
-- **cross-platform (!! in progress)** : support across windows and linux (macOS planned).
-- **cloud sync (!! in progress)**: expect cloud sync features to be added soon, to keep your data available across all devices. 
+- **cross-platform (!! work-in-progress)** : support across windows and linux (macOS planned).
 
 ## future plans
 - **advanced export formats**: exporting for more formats (pdf,html).
