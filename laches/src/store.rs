@@ -30,7 +30,7 @@ impl Default for LachesStore {
     fn default() -> Self {
         Self {
             autostart: true,
-            update_interval: 1,
+            update_interval: 5,
             process_information: Vec::new(),
             daemon_pid: u32::MAX,
             process_list_options: ProcessListOptions::default(),
