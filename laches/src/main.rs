@@ -15,7 +15,7 @@ use tabled::{builder::Builder, settings::Style};
 fn main() -> Result<(), Box<dyn Error>> {
     let store_path = match dirs::config_dir() {
         Some(dir) => dir.join("lachesis"),
-        None => return Err("failed to get configuration directory".into()),
+        None => return Err("error: failed to get configuration directory".into()),
     };
     std::fs::create_dir_all(&store_path)?;
 
@@ -64,7 +64,7 @@ fn set_mode(mode: &str, laches_store: &mut LachesStore) -> Result<(), Box<dyn Er
             );
             Ok(())
         }
-        Err(_) => Err(format!("no match found for mode: {}", mode).into()),
+        Err(_) => Err(format!("error: no match found for mode: '{}'", mode).into()),
     }
 }
 
