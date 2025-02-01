@@ -15,7 +15,7 @@ use tabled::{builder::Builder, settings::Style};
 fn main() -> Result<(), Box<dyn Error>> {
     let store_path = match dirs::config_dir() {
         Some(dir) => dir.join("lachesis"),
-        None => return Err("error: failed to get configuration directory".into()),
+        None => return Err("failed to get configuration directory".into()),
     };
     std::fs::create_dir_all(&store_path)?;
 
@@ -64,10 +64,7 @@ fn set_mode(mode: &str, laches_store: &mut LachesStore) -> Result<(), Box<dyn Er
             );
             Ok(())
         }
-        Err(_) => {
-            println!("error: match found for mode: {}", mode);
-            Err(Box::new(std::fmt::Error))
-        }
+        Err(_) => Err(format!("no match found for mode: {}", mode).into()),
     }
 }
 
@@ -95,17 +92,23 @@ fn list_processes(laches_store: &LachesStore) -> Result<(), Box<dyn Error>> {
     for window in &sorted_windows {
         match laches_store.process_list_options.mode {
             ListMode::Whitelist => {
-                if let Some(ref whitelist) = laches_store.process_list_options.whitelist {
-                    if !whitelist.contains(&window.title) {
-                        continue;
-                    }
+                let whitelist = laches_store
+                    .process_list_options
+                    .whitelist
+                    .as_deref()
+                    .unwrap_or(&[]);
+                if !whitelist.contains(&window.title) {
+                    continue;
                 }
             }
             ListMode::Blacklist => {
-                if let Some(ref blacklist) = laches_store.process_list_options.blacklist {
-                    if blacklist.contains(&window.title) {
-                        continue;
-                    }
+                let blacklist = laches_store
+                    .process_list_options
+                    .blacklist
+                    .as_deref()
+                    .unwrap_or(&[]);
+                if blacklist.contains(&window.title) {
+                    continue;
                 }
             }
             ListMode::Default => {
