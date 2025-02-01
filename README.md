@@ -7,7 +7,7 @@ lachesis is a completely cli-based, customizable, automatic time tracking tool d
 ## features
 - **automatic time tracking**: constant running daemon (laches_mon) that keeps track of active windows. (default: 5000ms).
 - **tags**: tag specific windows and group times together
-- **customizable rules**: set up rules for tracking or ignoring specific apps and processes. supports regex for advanced use cases.
+- **customizable rules**: set up rules for tracking or ignoring specific programs. (!! regex support planned)
 - **backups**: ability to create backups of your tracking data.
 - **export options**: easily export time tracking data in multiple formats (csv, json etc.).
 - **cross-platform (!! in progress)** : support across windows and linux (macOS planned).
