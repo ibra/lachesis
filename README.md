@@ -2,7 +2,7 @@
 
 
 ## lachesis (la·kuh·suhs)
-lachesis is a completely cli-based, customizable, automatic time tracking tool designed for tracking and viewing tikme. it automatically tracks your window usage and provides an intuitive command line interface for managing and viewing your time tracking activities. 
+lachesis is a completely cli-based, customizable, automatic time tracking tool designed for tracking and viewing screentime. it automatically tracks your window usage and provides an intuitive command line interface for managing and viewing your time tracking activities. 
 
 ## features
 - **automatic time tracking**: constant running daemon (laches_mon) that keeps track of active windows. (default: 5000ms).
