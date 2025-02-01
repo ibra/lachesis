@@ -1,4 +1,4 @@
-> warning ! this program is a work-in-progress and is subject to rapid breaking changes in the main branch. contributions are very welcome.
+> warning ! this program is a work-in-progress and is subject to rapid breaking changes in the master branch. contributions are very welcome.
 
 
 ## lachesis (la·kuh·suhs)
