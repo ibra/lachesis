@@ -5,7 +5,7 @@
 lachesis is a completely cli-based, customizable, automatic time tracking tool designed for tracking and viewing screentime. it automatically tracks your window usage and provides an intuitive command line interface for managing and viewing your time tracking activities. 
 
 ## features
-- **automatic time tracking**: constant running daemon (laches_mon) that keeps track of active windows. (default: 5000ms).
+- **automatic time tracking**: constant running daemon (laches_mon) that keeps track of active windows. (default interval: 5000ms).
 - **tags**: tag specific windows and group times together
 - **customizable rules**: set up rules for tracking or ignoring specific programs. (!! regex support planned)
 - **backups**: ability to create backups of your tracking data.
@@ -13,9 +13,9 @@ lachesis is a completely cli-based, customizable, automatic time tracking tool d
 - **cross-platform (!! work-in-progress)** : support across windows and linux (macOS planned).
 
 ## future plans
-- **advanced export formats**: exporting for more formats (pdf,html).
-- **better visualization**: gui for visualizing time-tracking export data.
-- **cloud sync**: bring-your-own-cloud-provider and sync your time tracking data across devices.
+- **more export formats**: exporting for more formats (pdf,html).
+- **better visualization**: gui/graphvis for visualizing time-tracking export data within the CLI.
+- **cloud sync**: bring-your-own-cloud-provider and auto-accumulate your time tracking data across devices.
 
 ## usage
 ### starting and stopping
@@ -41,9 +41,9 @@ laches autostart off
 ```
 
 ### deleting data
-delete time-tracking activity for the past 7 days with:
+delete time-tracking activity for the past 7 days (default) with:
 ```bash
-laches delete
+laches delete --duration=7d
 # are you sure you want to delete time tracking activity for the past 7 days? (y/N)
 ```
 or delete all recorded time:
@@ -58,21 +58,18 @@ see all the applications currently being tracked:
 laches list
 ```
 
-### blacklist/whitelist
+### narrow down windows
 blacklist a specific app:
 ```bash
-laches blacklist test.exe
-# stopped time tracking for process "VALORANT.exe"
+laches ignore test.exe
+# stopped time tracking for process "test.exe"
 ```
 
 or use wildcards for patterns (regex support planned!)
 ```bash
-laches blacklist *spotify
+laches ignore *spotify
 # detected wildcard.
 # stopped time tracking for processes containing "*spotify".
-
-laches whitelist *spotify
-# resumed time tracking for processes containing "*spotify".
 ```
 
 ### exporting data
@@ -81,7 +78,7 @@ export your time tracking data to a file:
 laches export out.csv
 # exported past 7 days of time tracking information into "out.csv"!
 
-laches export out.json --json
+laches export out.json
 # exported past 7 days of time tracking information into "out.json"!
 ```
 future options will include pdf and html exports.
