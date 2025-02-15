@@ -1,4 +1,4 @@
-> warning ! this program is a work-in-progress and is subject to rapid breaking changes in the master branch. contributions are very welcome.
+> !! warning:  this program is a work-in-progress and is subject to rapid breaking changes in the master branch. contributions are very welcome.
 
 
 ## lachesis (la·kuh·suhs)
@@ -40,25 +40,13 @@ laches autostart off
 # stopped booting on startup.
 ```
 
-### deleting data
-delete time-tracking activity for the past 7 days (default) with:
-```bash
-laches delete --duration=7d
-# are you sure you want to delete time tracking activity for the past 7 days? (y/N)
-```
-or delete all recorded time:
-```bash
-laches delete all
-# are you sure you want to delete time tracking activity for all time? (y/N)
-```
-
 ### list/watch
 see all the applications currently being tracked:
 ```bash
 laches list
 ```
 
-### narrow down windows
+### filtering
 blacklist a specific app:
 ```bash
 laches ignore test.exe
@@ -83,6 +71,19 @@ laches export out.json
 ```
 future options will include pdf and html exports.
 
+### deleting data
+delete time-tracking activity for the past 7 days (default) with:
+```bash
+laches delete --duration=7d
+# are you sure you want to delete time tracking activity for the past 7 days? (y/N)
+```
+or delete all recorded time:
+```bash
+laches delete all
+# are you sure you want to delete time tracking activity for all time? (y/N)
+```
+
+
 ## development
-- contributions are welcome! if you have ideas or improvements, check out the issue tracker and start contributing.
+- !! contributions are welcome: if you have ideas or improvements, check out the issue tracker and start contributing.
 - report issues or request features by making an [issue](https://github.com/ibra/lachesis/issues/new?template=Blank+issue).
