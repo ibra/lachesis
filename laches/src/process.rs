@@ -1,3 +1,5 @@
+use std::env;
+use std::path::PathBuf;
 use std::{error::Error, path::Path, process::Command};
 
 use crate::{
@@ -13,7 +15,11 @@ pub fn start_monitoring(
     let active_windows = get_active_processes();
     println!("info: started monitoring {} windows", &active_windows.len());
 
-    let mut monitor = Command::new("laches_mon");
+    let mut exe_path = env::current_exe().unwrap();
+    exe_path.pop();
+    exe_path.push("laches_mon");
+
+    let mut monitor = Command::new(exe_path);
     monitor
         .arg(&laches_store.update_interval.to_string())
         .arg(&store_path.join(STORE_NAME));
@@ -23,7 +29,6 @@ pub fn start_monitoring(
         .expect("error: failed to execute laches_mon (monitoring daemon)");
 
     laches_store.daemon_pid = instance.id();
-
     Ok(())
 }
 
