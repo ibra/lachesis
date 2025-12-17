@@ -1,5 +1,7 @@
+use chrono::{Local, NaiveDate};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     error::Error,
     fs::{self, File, OpenOptions},
     io::{BufReader, Write},
@@ -14,7 +16,44 @@ pub const STORE_NAME: &str = "store.json";
 #[derive(Deserialize, Serialize, Clone, Tabled)]
 pub struct Process {
     pub title: String,
-    pub uptime: u64,
+    #[tabled(skip)]
+    pub uptime: u64, // total cumulative uptime for backward compatibility
+    #[tabled(skip)]
+    pub daily_usage: HashMap<String, u64>, // date -> seconds mapping
+    #[tabled(skip)]
+    pub tags: Vec<String>,
+    #[tabled(skip)]
+    pub last_seen: String, // last date this process was active
+}
+
+impl Process {
+    pub fn new(title: String) -> Self {
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        Self {
+            title,
+            uptime: 0,
+            daily_usage: HashMap::new(),
+            tags: Vec::new(),
+            last_seen: today,
+        }
+    }
+
+    pub fn get_today_usage(&self) -> u64 {
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        *self.daily_usage.get(&today).unwrap_or(&0)
+    }
+
+    pub fn get_total_usage(&self) -> u64 {
+        self.daily_usage.values().sum()
+    }
+
+    pub fn add_time(&mut self, seconds: u64) {
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        let current = self.daily_usage.get(&today).unwrap_or(&0);
+        self.daily_usage.insert(today.clone(), current + seconds);
+        self.uptime += seconds;
+        self.last_seen = today;
+    }
 }
 
 #[derive(Deserialize, Serialize)]

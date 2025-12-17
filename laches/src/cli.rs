@@ -10,10 +10,37 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    Autostart { toggle: String },
+    Autostart {
+        toggle: String,
+    },
     Start,
     Stop,
-    Mode { mode: String },
-    List,
+    Mode {
+        mode: String,
+    },
+    List {
+        /// Filter by tag
+        #[arg(short, long)]
+        tag: Option<String>,
+        /// Show only today's usage
+        #[arg(short = 'd', long)]
+        today: bool,
+        /// Date to show usage for (YYYY-MM-DD format)
+        #[arg(long)]
+        date: Option<String>,
+    },
+    Tag {
+        /// Process name to tag
+        process: String,
+        /// Tags to add (comma-separated)
+        #[arg(short, long)]
+        add: Option<String>,
+        /// Tags to remove (comma-separated)
+        #[arg(short, long)]
+        remove: Option<String>,
+        /// List tags for a process
+        #[arg(short, long)]
+        list: bool,
+    },
     Reset,
 }
