@@ -1,11 +1,9 @@
-use std::env;
-use std::path::PathBuf;
-use std::{error::Error, path::Path, process::Command};
-
 use crate::{
     store::{LachesStore, Process, STORE_NAME},
     utils::confirm,
 };
+use std::env;
+use std::{error::Error, path::Path, process::Command};
 use sysinfo::{Pid, System};
 
 pub fn start_monitoring(
@@ -59,10 +57,7 @@ pub fn get_active_processes() -> Vec<Process> {
             continue;
         }
 
-        active_processes.push(Process {
-            title: name,
-            uptime: 0,
-        });
+        active_processes.push(Process::new(name));
     }
     active_processes
 }

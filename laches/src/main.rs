@@ -1,17 +1,17 @@
 use auto_launch::AutoLaunch;
 use clap::Parser;
+use colored::Colorize;
 use laches::{
     cli::{Cli, Commands},
     process::{start_monitoring, stop_monitoring},
     process_list::ListMode,
     store::{
-        get_stored_processes, load_or_create_store, reset_store, save_store, LachesStore,
+        get_stored_processes, load_or_create_store, reset_store, save_store, LachesStore, Process,
         STORE_NAME,
     },
     utils::{confirm, format_uptime},
 };
 use std::{error::Error, path::Path, process::Command};
-use tabled::{builder::Builder, settings::Style};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let store_path = match dirs::config_dir() {
@@ -30,7 +30,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Start => start_monitoring(&mut laches_store, &store_path),
         Commands::Stop => stop_monitoring(&mut laches_store),
         Commands::Mode { mode } => set_mode(mode, &mut laches_store),
-        Commands::List => list_processes(&laches_store),
+        Commands::List { tag, today, date } => {
+            list_processes(&laches_store, tag.as_deref(), *today, date.as_deref())
+        }
+        Commands::Tag {
+            process,
+            add,
+            remove,
+            list,
+        } => handle_tag_command(
+            &mut laches_store,
+            process,
+            add.as_deref(),
+            remove.as_deref(),
+            *list,
+        ),
         Commands::Reset => confirm_reset_store(&store_path),
     }?;
 
@@ -130,64 +144,228 @@ fn set_mode(mode: &str, laches_store: &mut LachesStore) -> Result<(), Box<dyn Er
     }
 }
 
-fn list_processes(laches_store: &LachesStore) -> Result<(), Box<dyn Error>> {
+fn list_processes(
+    laches_store: &LachesStore,
+    tag_filter: Option<&str>,
+    today_only: bool,
+    date_filter: Option<&str>,
+) -> Result<(), Box<dyn Error>> {
     let all_windows = get_stored_processes(laches_store);
-    let mut builder = Builder::default();
 
-    println!(
-        "{}",
-        &format!(
-            "Tracked Window Usage ({} Mode)",
-            match laches_store.process_list_options.mode {
-                ListMode::Whitelist => "Whitelist",
-                ListMode::Blacklist => "Blacklist",
-                ListMode::Default => "Default",
-            }
-        )
-    );
+    // Determine display mode
+    let display_mode = if let Some(date) = date_filter {
+        format!("Usage for {}", date)
+    } else if today_only {
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        format!("Today's Usage ({})", today)
+    } else {
+        "Total Usage".to_string()
+    };
 
-    let mut sorted_windows = all_windows.clone();
-    sorted_windows.sort_by_key(|window| std::cmp::Reverse(window.uptime));
+    let mode_str = match laches_store.process_list_options.mode {
+        ListMode::Whitelist => "Whitelist",
+        ListMode::Blacklist => "Blacklist",
+        ListMode::Default => "Default",
+    };
 
-    builder.push_record(["Process Name", "Usage Time"]);
+    if let Some(tag) = tag_filter {
+        println!(
+            "{}",
+            format!(
+                "Tracked Window Usage - Tag: {} ({} Mode, {})",
+                tag, mode_str, display_mode
+            )
+            .bold()
+            .cyan()
+        );
+    } else {
+        println!(
+            "{}",
+            format!("Tracked Window Usage ({} Mode, {})", mode_str, display_mode)
+                .bold()
+                .cyan()
+        );
+    }
+    println!();
 
-    for window in &sorted_windows {
-        match laches_store.process_list_options.mode {
-            ListMode::Whitelist => {
-                let whitelist = laches_store
-                    .process_list_options
-                    .whitelist
-                    .as_deref()
-                    .unwrap_or(&[]);
-                if !whitelist.contains(&window.title) {
-                    continue;
+    // Filter and sort windows
+    let mut filtered_windows: Vec<Process> = all_windows
+        .into_iter()
+        .filter(|window| {
+            // Apply whitelist/blacklist
+            let passes_mode = match laches_store.process_list_options.mode {
+                ListMode::Whitelist => {
+                    let whitelist = laches_store
+                        .process_list_options
+                        .whitelist
+                        .as_deref()
+                        .unwrap_or(&[]);
+                    whitelist.contains(&window.title)
                 }
-            }
-            ListMode::Blacklist => {
-                let blacklist = laches_store
-                    .process_list_options
-                    .blacklist
-                    .as_deref()
-                    .unwrap_or(&[]);
-                if blacklist.contains(&window.title) {
-                    continue;
+                ListMode::Blacklist => {
+                    let blacklist = laches_store
+                        .process_list_options
+                        .blacklist
+                        .as_deref()
+                        .unwrap_or(&[]);
+                    !blacklist.contains(&window.title)
                 }
-            }
-            ListMode::Default => {
-                // default mode does no filtering, so process all windows
-            }
-        }
+                ListMode::Default => true,
+            };
 
-        builder.push_record([&window.title, &format_uptime(window.uptime)]);
+            // Apply tag filter
+            let passes_tag = if let Some(tag) = tag_filter {
+                window.tags.iter().any(|t| t == tag)
+            } else {
+                true
+            };
+
+            passes_mode && passes_tag
+        })
+        .collect();
+
+    // Sort by appropriate usage
+    if let Some(date) = date_filter {
+        filtered_windows.sort_by_key(|w| std::cmp::Reverse(*w.daily_usage.get(date).unwrap_or(&0)));
+    } else if today_only {
+        filtered_windows.sort_by_key(|w| std::cmp::Reverse(w.get_today_usage()));
+    } else {
+        filtered_windows.sort_by_key(|w| std::cmp::Reverse(w.get_total_usage()));
     }
 
-    let mut table = builder.build();
-    table.with(Style::rounded());
+    if filtered_windows.is_empty() {
+        println!("{}", "warning: no monitored windows".yellow());
+        return Ok(());
+    }
 
-    print!("{}", table);
+    // Find max usage for progress bar scaling
+    let max_usage = if let Some(date) = date_filter {
+        filtered_windows
+            .iter()
+            .map(|w| *w.daily_usage.get(date).unwrap_or(&0))
+            .max()
+            .unwrap_or(1)
+    } else if today_only {
+        filtered_windows
+            .iter()
+            .map(|w| w.get_today_usage())
+            .max()
+            .unwrap_or(1)
+    } else {
+        filtered_windows
+            .iter()
+            .map(|w| w.get_total_usage())
+            .max()
+            .unwrap_or(1)
+    };
 
-    if all_windows.is_empty() {
-        println!("warning: no monitored windows");
+    // Display processes with progress bars
+    for window in &filtered_windows {
+        let usage = if let Some(date) = date_filter {
+            *window.daily_usage.get(date).unwrap_or(&0)
+        } else if today_only {
+            window.get_today_usage()
+        } else {
+            window.get_total_usage()
+        };
+
+        if usage == 0 {
+            continue;
+        }
+
+        let formatted_time = format_uptime(usage);
+        let percentage = (usage as f64 / max_usage as f64) * 100.0;
+        let bar_length = 40;
+        let filled = ((percentage / 100.0) * bar_length as f64) as usize;
+        let empty = bar_length - filled;
+
+        let bar = format!(
+            "{}{}",
+            "█".repeat(filled).green(),
+            "░".repeat(empty).bright_black()
+        );
+
+        // Show tags if present
+        let tag_display = if !window.tags.is_empty() {
+            format!(" {}", format!("[{}]", window.tags.join(", ")).bright_blue())
+        } else {
+            String::new()
+        };
+
+        println!(
+            "{:40} {} {:>12} {:>6.1}%{}",
+            window.title.bright_white(),
+            bar,
+            formatted_time.yellow(),
+            percentage,
+            tag_display
+        );
+    }
+
+    println!();
+    println!(
+        "{}",
+        format!("Total processes: {}", filtered_windows.len()).bright_black()
+    );
+
+    Ok(())
+}
+
+fn handle_tag_command(
+    laches_store: &mut LachesStore,
+    process_name: &str,
+    add_tags: Option<&str>,
+    remove_tags: Option<&str>,
+    list_tags: bool,
+) -> Result<(), Box<dyn Error>> {
+    let process = laches_store
+        .process_information
+        .iter_mut()
+        .find(|p| p.title == process_name);
+
+    if process.is_none() {
+        return Err(format!("error: process '{}' not found", process_name).into());
+    }
+
+    let process = process.unwrap();
+
+    if list_tags {
+        if process.tags.is_empty() {
+            println!("Process '{}' has no tags", process_name);
+        } else {
+            println!("Tags for '{}': {}", process_name, process.tags.join(", "));
+        }
+        return Ok(());
+    }
+
+    if let Some(tags_str) = add_tags {
+        let new_tags: Vec<String> = tags_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        for tag in new_tags {
+            if !process.tags.contains(&tag) {
+                process.tags.push(tag.clone());
+                println!("Added tag '{}' to '{}'", tag, process_name);
+            }
+        }
+    }
+
+    if let Some(tags_str) = remove_tags {
+        let remove_tags: Vec<String> = tags_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        for tag in remove_tags {
+            if let Some(pos) = process.tags.iter().position(|t| t == &tag) {
+                process.tags.remove(pos);
+                println!("Removed tag '{}' from '{}'", tag, process_name);
+            }
+        }
     }
 
     Ok(())

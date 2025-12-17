@@ -1,4 +1,4 @@
-use chrono::{Local, NaiveDate};
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -17,13 +17,21 @@ pub const STORE_NAME: &str = "store.json";
 pub struct Process {
     pub title: String,
     #[tabled(skip)]
-    pub uptime: u64, // total cumulative uptime for backward compatibility
+    #[serde(default)]
+    pub uptime: u64,
     #[tabled(skip)]
-    pub daily_usage: HashMap<String, u64>, // date -> seconds mapping
+    #[serde(default)]
+    pub daily_usage: HashMap<String, u64>,
     #[tabled(skip)]
+    #[serde(default)]
     pub tags: Vec<String>,
     #[tabled(skip)]
-    pub last_seen: String, // last date this process was active
+    #[serde(default = "get_today_date")]
+    pub last_seen: String,
+}
+
+fn get_today_date() -> String {
+    Local::now().format("%Y-%m-%d").to_string()
 }
 
 impl Process {
