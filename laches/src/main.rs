@@ -1,3 +1,4 @@
+use auto_launch::AutoLaunch;
 use clap::Parser;
 use laches::{
     cli::{Cli, Commands},
@@ -46,12 +47,73 @@ fn configure_daemon(laches_store: &LachesStore, store_path: &Path) {
 }
 
 fn handle_autostart(toggle: &str) -> Result<(), Box<dyn Error>> {
-    match toggle {
-        "yes" => println!("info: enabled boot on startup."),
-        "no" => println!("info: disabled boot on startup."),
-        _ => println!("error: invalid option for autostart. Use 'yes' or 'no'."),
+    // Get the store path for laches_mon arguments
+    let store_path = match dirs::config_dir() {
+        Some(dir) => dir.join("lachesis"),
+        None => return Err("error: failed to get configuration directory".into()),
+    };
+
+    let store_file = store_path.join(STORE_NAME);
+    let laches_store = load_or_create_store(&store_path)?;
+
+    // Find laches_mon executable
+    let laches_mon_path = if cfg!(windows) {
+        std::env::current_exe()?
+            .parent()
+            .ok_or("Failed to get parent directory")?
+            .join("laches_mon.exe")
+    } else {
+        std::env::current_exe()?
+            .parent()
+            .ok_or("Failed to get parent directory")?
+            .join("laches_mon")
+    };
+
+    // Verify laches_mon exists
+    if !laches_mon_path.exists() {
+        return Err(format!(
+            "error: laches_mon executable not found at: {}",
+            laches_mon_path.display()
+        )
+        .into());
     }
-    todo!("info: command not yet implemented.")
+
+    // Build the command arguments for laches_mon
+    let args = vec![
+        laches_store.update_interval.to_string(),
+        store_file.to_string_lossy().to_string(),
+    ];
+
+    // Create AutoLaunch configuration
+    let auto = AutoLaunch::new(
+        "laches_mon",
+        laches_mon_path.to_str().ok_or("Invalid path")?,
+        &args,
+    );
+
+    match toggle {
+        "yes" => {
+            if auto.is_enabled()? {
+                println!("info: autostart is already enabled.");
+            } else {
+                auto.enable()?;
+                println!("info: enabled laches_mon to run at startup.");
+            }
+        }
+        "no" => {
+            if !auto.is_enabled()? {
+                println!("info: autostart is already disabled.");
+            } else {
+                auto.disable()?;
+                println!("info: disabled laches_mon from running at startup.");
+            }
+        }
+        _ => {
+            return Err("error: invalid option for autostart. Use 'yes' or 'no'.".into());
+        }
+    }
+
+    Ok(())
 }
 
 fn set_mode(mode: &str, laches_store: &mut LachesStore) -> Result<(), Box<dyn Error>> {
