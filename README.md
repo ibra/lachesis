@@ -58,15 +58,14 @@ blacklist a specific app:
 
 ```bash
 laches blacklist add test.exe
-# stopped time tracking for process "test.exe"
+# stopped displaying metrics for process "test.exe"
 ```
 
 or use wildcards for patterns (regex support planned!)
 
 ```bash
-laches blacklist add *_daemon.exe
-# detected wildcard.
-# stopped time tracking for processes containing "*_daemon".
+lachesis whitelist add "^chrome.*" --regex
+# stops displaying metrics for processes matching the pattern "^chrome.*".
 ```
 
 ### exporting data
