@@ -67,16 +67,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_get_active_processes_returns_vector() {
-        // This test verifies that get_active_processes returns a vector
-        // The actual content will vary by system
-        let processes = get_active_processes();
-
-        // Should be a valid vector (might be empty or populated)
-        assert!(processes.len() >= 0);
-    }
-
-    #[test]
     fn test_get_active_processes_no_duplicates() {
         let processes = get_active_processes();
 
