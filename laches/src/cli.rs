@@ -51,4 +51,29 @@ pub enum Commands {
         #[arg(long)]
         duration: Option<String>,
     },
+    Whitelist {
+        #[command(subcommand)]
+        action: ListAction,
+    },
+    Blacklist {
+        #[command(subcommand)]
+        action: ListAction,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ListAction {
+    Add {
+        /// Process name or regex pattern to add
+        process: String,
+        /// Treat the pattern as a regex (requires confirmation)
+        #[arg(short, long)]
+        regex: bool,
+    },
+    Remove {
+        /// Process name or regex pattern to remove
+        process: String,
+    },
+    List,
+    Clear,
 }

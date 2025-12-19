@@ -14,6 +14,7 @@ serde_json.workspace = true
 tabled = "0.16.0"
 chrono = { version = "0.4", features = ["serde"] }
 colored = "2.1"
+regex.workspace = true
 
 [dev-dependencies]
 tempfile = "3.8"
