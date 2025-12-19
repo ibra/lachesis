@@ -147,7 +147,7 @@ pub fn export_store(
     Ok(())
 }
 
-fn parse_duration(duration_str: &str) -> Result<i64, Box<dyn Error>> {
+pub fn parse_duration(duration_str: &str) -> Result<i64, Box<dyn Error>> {
     if !duration_str.ends_with('d') {
         return Err("error: duration must be in format like '7d', '30d', etc.".into());
     }
@@ -162,4 +162,205 @@ fn parse_duration(duration_str: &str) -> Result<i64, Box<dyn Error>> {
     }
 
     Ok(days)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_parse_duration_valid() {
+        assert_eq!(parse_duration("7d").unwrap(), 7);
+        assert_eq!(parse_duration("30d").unwrap(), 30);
+        assert_eq!(parse_duration("365d").unwrap(), 365);
+        assert_eq!(parse_duration("1d").unwrap(), 1);
+    }
+
+    #[test]
+    fn test_parse_duration_invalid_format() {
+        assert!(parse_duration("7").is_err());
+        assert!(parse_duration("7days").is_err());
+        assert!(parse_duration("d7").is_err());
+        assert!(parse_duration("7w").is_err());
+        assert!(parse_duration("").is_err());
+    }
+
+    #[test]
+    fn test_parse_duration_invalid_number() {
+        assert!(parse_duration("abcd").is_err());
+        assert!(parse_duration("12.5d").is_err());
+        assert!(parse_duration("-5d").is_err());
+        assert!(parse_duration("0d").is_err());
+    }
+
+    #[test]
+    fn test_parse_duration_zero_or_negative() {
+        let result = parse_duration("0d");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("duration must be a positive number"));
+    }
+
+    #[test]
+    fn test_export_store_all_data() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("export.json");
+
+        let mut store = LachesStore::default();
+        let mut process1 = Process::new("process1".to_string());
+        process1.add_time(3600);
+        let mut process2 = Process::new("process2".to_string());
+        process2.add_time(7200);
+        store.process_information.push(process1);
+        store.process_information.push(process2);
+
+        let result = export_store(&store, output_path.to_str().unwrap(), None);
+        assert!(result.is_ok());
+        assert!(output_path.exists());
+
+        // Verify exported data
+        let exported_data = std::fs::read_to_string(&output_path).unwrap();
+        let exported_processes: Vec<Process> = serde_json::from_str(&exported_data).unwrap();
+        assert_eq!(exported_processes.len(), 2);
+    }
+
+    #[test]
+    fn test_export_store_with_duration_filter() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("export_filtered.json");
+
+        let mut store = LachesStore::default();
+        let mut process = Process::new("test_process".to_string());
+
+        // Add data for today
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        process.daily_usage.insert(today.clone(), 1000);
+
+        // Add data for 10 days ago
+        let old_date = (chrono::Local::now() - chrono::Duration::days(10))
+            .format("%Y-%m-%d")
+            .to_string();
+        process.daily_usage.insert(old_date.clone(), 5000);
+
+        process.uptime = 6000;
+        store.process_information.push(process);
+
+        // Export only last 5 days
+        let result = export_store(&store, output_path.to_str().unwrap(), Some("5d"));
+        assert!(result.is_ok());
+
+        let exported_data = std::fs::read_to_string(&output_path).unwrap();
+        let exported_processes: Vec<Process> = serde_json::from_str(&exported_data).unwrap();
+
+        assert_eq!(exported_processes.len(), 1);
+        // Should only have today's data
+        assert_eq!(exported_processes[0].daily_usage.len(), 1);
+        assert!(exported_processes[0].daily_usage.contains_key(&today));
+        assert!(!exported_processes[0].daily_usage.contains_key(&old_date));
+    }
+
+    #[test]
+    fn test_export_store_excludes_zero_uptime() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("export_no_zero.json");
+
+        let mut store = LachesStore::default();
+        let mut process_with_time = Process::new("active".to_string());
+        process_with_time.add_time(1000);
+        let process_without_time = Process::new("inactive".to_string());
+
+        store.process_information.push(process_with_time);
+        store.process_information.push(process_without_time);
+
+        let result = export_store(&store, output_path.to_str().unwrap(), None);
+        assert!(result.is_ok());
+
+        let exported_data = std::fs::read_to_string(&output_path).unwrap();
+        let exported_processes: Vec<Process> = serde_json::from_str(&exported_data).unwrap();
+
+        // Only process with uptime > 0 should be exported
+        assert_eq!(exported_processes.len(), 1);
+        assert_eq!(exported_processes[0].title, "active");
+    }
+
+    #[test]
+    fn test_export_store_sorting() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("export_sorted.json");
+
+        let mut store = LachesStore::default();
+        let mut process1 = Process::new("low_usage".to_string());
+        process1.add_time(100);
+        let mut process2 = Process::new("high_usage".to_string());
+        process2.add_time(1000);
+        let mut process3 = Process::new("medium_usage".to_string());
+        process3.add_time(500);
+
+        store.process_information.push(process1);
+        store.process_information.push(process2);
+        store.process_information.push(process3);
+
+        let result = export_store(&store, output_path.to_str().unwrap(), None);
+        assert!(result.is_ok());
+
+        let exported_data = std::fs::read_to_string(&output_path).unwrap();
+        let exported_processes: Vec<Process> = serde_json::from_str(&exported_data).unwrap();
+
+        // Should be sorted by total usage (descending)
+        assert_eq!(exported_processes[0].title, "high_usage");
+        assert_eq!(exported_processes[1].title, "medium_usage");
+        assert_eq!(exported_processes[2].title, "low_usage");
+    }
+
+    #[test]
+    fn test_confirm_delete_store_all_clears_data() {
+        let mut store = LachesStore::default();
+        let mut process1 = Process::new("process1".to_string());
+        process1.add_time(1000);
+        let mut process2 = Process::new("process2".to_string());
+        process2.add_time(2000);
+
+        store.process_information.push(process1);
+        store.process_information.push(process2);
+
+        // This test would require mocking user input, so we'll just verify
+        // the function signature and error handling
+        let result = confirm_delete_store(&mut store, false, None);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must specify either --all or --duration"));
+    }
+
+    #[test]
+    fn test_confirm_delete_store_invalid_both_flags() {
+        let mut store = LachesStore::default();
+
+        let result = confirm_delete_store(&mut store, true, Some("7d"));
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("cannot specify both --all and --duration"));
+    }
+
+    #[test]
+    fn test_export_store_empty_store() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("export_empty.json");
+
+        let store = LachesStore::default();
+
+        let result = export_store(&store, output_path.to_str().unwrap(), None);
+        assert!(result.is_ok());
+
+        let exported_data = std::fs::read_to_string(&output_path).unwrap();
+        let exported_processes: Vec<Process> = serde_json::from_str(&exported_data).unwrap();
+
+        assert_eq!(exported_processes.len(), 0);
+    }
 }

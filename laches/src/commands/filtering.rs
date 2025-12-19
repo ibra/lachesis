@@ -298,3 +298,151 @@ fn clear_list(laches_store: &mut LachesStore, is_whitelist: bool) -> Result<(), 
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_matches_any_pattern_exact_match() {
+        let patterns = vec![
+            "chrome.exe".to_string(),
+            "firefox.exe".to_string(),
+            "notepad.exe".to_string(),
+        ];
+
+        assert!(matches_any_pattern("chrome.exe", &patterns));
+        assert!(matches_any_pattern("firefox.exe", &patterns));
+        assert!(matches_any_pattern("notepad.exe", &patterns));
+        assert!(!matches_any_pattern("explorer.exe", &patterns));
+    }
+
+    #[test]
+    fn test_matches_any_pattern_regex() {
+        let patterns = vec![".*chrom.*".to_string(), "^notepad.*".to_string()];
+
+        assert!(matches_any_pattern("chrome", &patterns));
+        assert!(matches_any_pattern("google-chrome", &patterns));
+        assert!(matches_any_pattern("chromium", &patterns));
+        assert!(matches_any_pattern("notepad.exe", &patterns));
+        assert!(matches_any_pattern("notepad++", &patterns));
+        assert!(!matches_any_pattern("firefox", &patterns));
+    }
+
+    #[test]
+    fn test_matches_any_pattern_mixed() {
+        let patterns = vec![
+            "chrome.exe".to_string(),  // exact
+            ".*firefox.*".to_string(), // regex
+        ];
+
+        assert!(matches_any_pattern("chrome.exe", &patterns));
+        assert!(matches_any_pattern("firefox", &patterns));
+        assert!(matches_any_pattern("mozilla-firefox", &patterns));
+        assert!(!matches_any_pattern("chrome", &patterns)); // doesn't match exact "chrome.exe"
+    }
+
+    #[test]
+    fn test_matches_any_pattern_empty() {
+        let patterns: Vec<String> = vec![];
+        assert!(!matches_any_pattern("anything", &patterns));
+    }
+
+    #[test]
+    fn test_matches_any_pattern_invalid_regex() {
+        let patterns = vec![
+            "[invalid".to_string(), // invalid regex, but won't panic
+            "valid.exe".to_string(),
+        ];
+
+        // Invalid regex won't match anything, but won't cause error
+        assert!(!matches_any_pattern("invalid", &patterns));
+        assert!(matches_any_pattern("valid.exe", &patterns));
+    }
+
+    #[test]
+    fn test_matches_any_pattern_case_sensitive() {
+        let patterns = vec!["Chrome.exe".to_string()];
+
+        assert!(matches_any_pattern("Chrome.exe", &patterns));
+        assert!(!matches_any_pattern("chrome.exe", &patterns));
+    }
+
+    #[test]
+    fn test_matches_any_pattern_complex_regex() {
+        let patterns = vec![
+            r"^(chrome|firefox|edge)\.exe$".to_string(),
+            r"\d+".to_string(), // matches any digit
+        ];
+
+        assert!(matches_any_pattern("chrome.exe", &patterns));
+        assert!(matches_any_pattern("firefox.exe", &patterns));
+        assert!(matches_any_pattern("edge.exe", &patterns));
+        assert!(matches_any_pattern("test123", &patterns)); // has digits
+        assert!(!matches_any_pattern("safari.exe", &patterns));
+        assert!(!matches_any_pattern("nodigits", &patterns));
+    }
+
+    #[test]
+    fn test_remove_from_list_whitelist() {
+        let mut store = LachesStore::default();
+        store.process_list_options.whitelist = Some(vec![
+            "process1".to_string(),
+            "process2".to_string(),
+            "process3".to_string(),
+        ]);
+
+        let result = remove_from_list(&mut store, "process2", true);
+        assert!(result.is_ok());
+
+        let whitelist = store.process_list_options.whitelist.as_ref().unwrap();
+        assert_eq!(whitelist.len(), 2);
+        assert!(whitelist.contains(&"process1".to_string()));
+        assert!(whitelist.contains(&"process3".to_string()));
+        assert!(!whitelist.contains(&"process2".to_string()));
+    }
+
+    #[test]
+    fn test_remove_from_list_blacklist() {
+        let mut store = LachesStore::default();
+        store.process_list_options.blacklist =
+            Some(vec!["unwanted1".to_string(), "unwanted2".to_string()]);
+
+        let result = remove_from_list(&mut store, "unwanted1", false);
+        assert!(result.is_ok());
+
+        let blacklist = store.process_list_options.blacklist.as_ref().unwrap();
+        assert_eq!(blacklist.len(), 1);
+        assert_eq!(blacklist[0], "unwanted2");
+    }
+
+    #[test]
+    fn test_remove_from_list_not_found() {
+        let mut store = LachesStore::default();
+        store.process_list_options.whitelist = Some(vec!["process1".to_string()]);
+
+        let result = remove_from_list(&mut store, "nonexistent", true);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_remove_from_list_empty() {
+        let mut store = LachesStore::default();
+        store.process_list_options.whitelist = None;
+
+        let result = remove_from_list(&mut store, "anything", true);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("empty"));
+    }
+
+    #[test]
+    fn test_remove_from_list_clears_when_empty() {
+        let mut store = LachesStore::default();
+        store.process_list_options.whitelist = Some(vec!["only_one".to_string()]);
+
+        let result = remove_from_list(&mut store, "only_one", true);
+        assert!(result.is_ok());
+        assert!(store.process_list_options.whitelist.is_none());
+    }
+}
