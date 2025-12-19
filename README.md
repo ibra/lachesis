@@ -73,7 +73,7 @@ lachesis whitelist add "^chrome.*" --regex
 export your time tracking data to a file:
 
 ```bash
-laches export out.json
+laches export out.json --duration=7d
 # exported past 7 days of time tracking information into "out.json"!
 ```
 
@@ -85,7 +85,7 @@ delete time-tracking activity for the past 7 days (default) with:
 
 ```bash
 laches delete --duration=7d
-# are you sure you want to delete time tracking activity for the past 7 days? (y/N)
+# are you sure you want to delete time tracking activity older than the past 7 days? (y/N)
 ```
 
 or delete all recorded time:

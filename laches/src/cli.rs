@@ -51,6 +51,13 @@ pub enum Commands {
         #[arg(long)]
         duration: Option<String>,
     },
+    Export {
+        /// Output file path for the exported data
+        output: String,
+        /// Export data from the past duration (e.g., 7d, 30d)
+        #[arg(long)]
+        duration: Option<String>,
+    },
     Whitelist {
         #[command(subcommand)]
         action: ListAction,

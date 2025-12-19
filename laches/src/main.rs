@@ -50,6 +50,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Delete { all, duration } => {
             confirm_delete_data(&mut laches_store, *all, duration.as_deref())
         }
+        Commands::Export { output, duration } => {
+            export_data(&laches_store, output, duration.as_deref())
+        }
         Commands::Whitelist { action } => handle_whitelist(&mut laches_store, action),
         Commands::Blacklist { action } => handle_blacklist(&mut laches_store, action),
     }?;
@@ -447,6 +450,87 @@ fn confirm_delete_data(
             println!("info: aborted delete operation");
         }
     }
+
+    Ok(())
+}
+
+fn export_data(
+    laches_store: &LachesStore,
+    output_path: &str,
+    duration: Option<&str>,
+) -> Result<(), Box<dyn Error>> {
+    use std::fs::File;
+    use std::io::Write;
+
+    // Calculate cutoff date if duration is provided
+    let cutoff_date = if let Some(duration_str) = duration {
+        let days = parse_duration(duration_str)?;
+        let cutoff = chrono::Local::now() - chrono::Duration::days(days);
+        Some(cutoff.format("%Y-%m-%d").to_string())
+    } else {
+        None
+    };
+
+    // Create export data structure
+    let mut export_processes: Vec<Process> = Vec::new();
+
+    for process in &laches_store.process_information {
+        let mut exported_process = process.clone();
+
+        // Filter daily usage based on cutoff date if provided
+        if let Some(ref cutoff) = cutoff_date {
+            exported_process.daily_usage = process
+                .daily_usage
+                .iter()
+                .filter(|(date, _)| date.as_str() >= cutoff.as_str())
+                .map(|(k, v)| (k.clone(), *v))
+                .collect();
+
+            // Recalculate uptime based on filtered data
+            exported_process.uptime = exported_process.daily_usage.values().sum();
+        }
+
+        // Only include processes with usage data
+        if exported_process.uptime > 0 {
+            export_processes.push(exported_process);
+        }
+    }
+
+    // Sort by total usage
+    export_processes.sort_by_key(|p| std::cmp::Reverse(p.get_total_usage()));
+
+    // Create the JSON output
+    let json_data = serde_json::to_string_pretty(&export_processes)?;
+
+    // Write to file
+    let mut file = File::create(output_path)?;
+    file.write_all(json_data.as_bytes())?;
+
+    // Print summary
+    let duration_text = if let Some(duration_str) = duration {
+        format!(" (past {})", duration_str)
+    } else {
+        " (all time)".to_string()
+    };
+
+    println!(
+        "{}",
+        format!(
+            "✓ Exported {} process(es){} to '{}'",
+            export_processes.len(),
+            duration_text,
+            output_path
+        )
+        .green()
+    );
+
+    // Calculate and display total time
+    let total_time: u64 = export_processes.iter().map(|p| p.get_total_usage()).sum();
+    let formatted_total = format_uptime(total_time);
+    println!(
+        "{}",
+        format!("  Total tracked time: {}", formatted_total).bright_black()
+    );
 
     Ok(())
 }
