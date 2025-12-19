@@ -43,4 +43,12 @@ pub enum Commands {
         list: bool,
     },
     Reset,
+    Delete {
+        /// Delete all recorded time
+        #[arg(long)]
+        all: bool,
+        /// Delete data older than duration (e.g., 7d, 30d)
+        #[arg(long)]
+        duration: Option<String>,
+    },
 }

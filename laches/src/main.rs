@@ -46,6 +46,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             *list,
         ),
         Commands::Reset => confirm_reset_store(&store_path),
+        Commands::Delete { all, duration } => {
+            confirm_delete_data(&mut laches_store, *all, duration.as_deref())
+        }
     }?;
 
     save_store(&laches_store, &store_path)?;
@@ -379,4 +382,85 @@ fn confirm_reset_store(store_path: &Path) -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+fn confirm_delete_data(
+    laches_store: &mut LachesStore,
+    delete_all: bool,
+    duration: Option<&str>,
+) -> Result<(), Box<dyn Error>> {
+    if !delete_all && duration.is_none() {
+        return Err("error: must specify either --all or --duration".into());
+    }
+
+    if delete_all && duration.is_some() {
+        return Err("error: cannot specify both --all and --duration".into());
+    }
+
+    if delete_all {
+        if confirm("are you sure you want to delete all recorded time? [y/N]") {
+            let total_processes = laches_store.process_information.len();
+            for process in &mut laches_store.process_information {
+                process.daily_usage.clear();
+                process.uptime = 0;
+            }
+            println!(
+                "info: deleted all recorded time from {} process(es)",
+                total_processes
+            );
+        } else {
+            println!("info: aborted delete operation");
+        }
+    } else if let Some(duration_str) = duration {
+        let days = parse_duration(duration_str)?;
+        let cutoff_date = chrono::Local::now() - chrono::Duration::days(days);
+        let cutoff_str = cutoff_date.format("%Y-%m-%d").to_string();
+
+        if confirm(&format!(
+            "are you sure you want to delete data older than {} days (before {})? [y/N]",
+            days, cutoff_str
+        )) {
+            let mut total_deleted = 0;
+            for process in &mut laches_store.process_information {
+                let dates_to_remove: Vec<String> = process
+                    .daily_usage
+                    .keys()
+                    .filter(|date| *date < &cutoff_str)
+                    .cloned()
+                    .collect();
+
+                for date in dates_to_remove {
+                    if let Some(usage) = process.daily_usage.remove(&date) {
+                        process.uptime = process.uptime.saturating_sub(usage);
+                        total_deleted += 1;
+                    }
+                }
+            }
+            println!(
+                "info: deleted {} daily record(s) older than {} days",
+                total_deleted, days
+            );
+        } else {
+            println!("info: aborted delete operation");
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_duration(duration_str: &str) -> Result<i64, Box<dyn Error>> {
+    if !duration_str.ends_with('d') {
+        return Err("error: duration must be in format like '7d', '30d', etc.".into());
+    }
+
+    let days_str = &duration_str[..duration_str.len() - 1];
+    let days = days_str
+        .parse::<i64>()
+        .map_err(|_| "error: invalid duration value")?;
+
+    if days <= 0 {
+        return Err("error: duration must be a positive number".into());
+    }
+
+    Ok(days)
 }
