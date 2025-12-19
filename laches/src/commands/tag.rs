@@ -61,3 +61,224 @@ pub fn handle_tag_command(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::Process;
+
+    #[test]
+    fn test_handle_tag_command_add_single_tag() {
+        let mut store = LachesStore::default();
+        let mut process = Process::new("test_process".to_string());
+        process.add_time(100);
+        store.process_information.push(process);
+
+        let result = handle_tag_command(&mut store, "test_process", Some("work"), None, false);
+        assert!(result.is_ok());
+
+        let process = &store.process_information[0];
+        assert_eq!(process.tags.len(), 1);
+        assert_eq!(process.tags[0], "work");
+    }
+
+    #[test]
+    fn test_handle_tag_command_add_multiple_tags() {
+        let mut store = LachesStore::default();
+        let mut process = Process::new("test_process".to_string());
+        process.add_time(100);
+        store.process_information.push(process);
+
+        let result = handle_tag_command(
+            &mut store,
+            "test_process",
+            Some("work,personal,dev"),
+            None,
+            false,
+        );
+        assert!(result.is_ok());
+
+        let process = &store.process_information[0];
+        assert_eq!(process.tags.len(), 3);
+        assert!(process.tags.contains(&"work".to_string()));
+        assert!(process.tags.contains(&"personal".to_string()));
+        assert!(process.tags.contains(&"dev".to_string()));
+    }
+
+    #[test]
+    fn test_handle_tag_command_add_tags_with_spaces() {
+        let mut store = LachesStore::default();
+        let mut process = Process::new("test_process".to_string());
+        process.add_time(100);
+        store.process_information.push(process);
+
+        let result = handle_tag_command(
+            &mut store,
+            "test_process",
+            Some("work , personal , dev"),
+            None,
+            false,
+        );
+        assert!(result.is_ok());
+
+        let process = &store.process_information[0];
+        assert_eq!(process.tags.len(), 3);
+        assert!(process.tags.contains(&"work".to_string()));
+        assert!(process.tags.contains(&"personal".to_string()));
+        assert!(process.tags.contains(&"dev".to_string()));
+    }
+
+    #[test]
+    fn test_handle_tag_command_add_duplicate_tag() {
+        let mut store = LachesStore::default();
+        let mut process = Process::new("test_process".to_string());
+        process.tags.push("work".to_string());
+        store.process_information.push(process);
+
+        let result = handle_tag_command(&mut store, "test_process", Some("work"), None, false);
+        assert!(result.is_ok());
+
+        let process = &store.process_information[0];
+        assert_eq!(process.tags.len(), 1); // Should not add duplicate
+        assert_eq!(process.tags[0], "work");
+    }
+
+    #[test]
+    fn test_handle_tag_command_remove_tag() {
+        let mut store = LachesStore::default();
+        let mut process = Process::new("test_process".to_string());
+        process.tags.push("work".to_string());
+        process.tags.push("personal".to_string());
+        store.process_information.push(process);
+
+        let result = handle_tag_command(&mut store, "test_process", None, Some("work"), false);
+        assert!(result.is_ok());
+
+        let process = &store.process_information[0];
+        assert_eq!(process.tags.len(), 1);
+        assert_eq!(process.tags[0], "personal");
+    }
+
+    #[test]
+    fn test_handle_tag_command_remove_multiple_tags() {
+        let mut store = LachesStore::default();
+        let mut process = Process::new("test_process".to_string());
+        process.tags.push("work".to_string());
+        process.tags.push("personal".to_string());
+        process.tags.push("dev".to_string());
+        store.process_information.push(process);
+
+        let result = handle_tag_command(&mut store, "test_process", None, Some("work,dev"), false);
+        assert!(result.is_ok());
+
+        let process = &store.process_information[0];
+        assert_eq!(process.tags.len(), 1);
+        assert_eq!(process.tags[0], "personal");
+    }
+
+    #[test]
+    fn test_handle_tag_command_remove_nonexistent_tag() {
+        let mut store = LachesStore::default();
+        let mut process = Process::new("test_process".to_string());
+        process.tags.push("work".to_string());
+        store.process_information.push(process);
+
+        let result =
+            handle_tag_command(&mut store, "test_process", None, Some("nonexistent"), false);
+        assert!(result.is_ok());
+
+        let process = &store.process_information[0];
+        assert_eq!(process.tags.len(), 1); // Tag unchanged
+        assert_eq!(process.tags[0], "work");
+    }
+
+    #[test]
+    fn test_handle_tag_command_add_and_remove_simultaneously() {
+        let mut store = LachesStore::default();
+        let mut process = Process::new("test_process".to_string());
+        process.tags.push("old_tag".to_string());
+        store.process_information.push(process);
+
+        let result = handle_tag_command(
+            &mut store,
+            "test_process",
+            Some("new_tag"),
+            Some("old_tag"),
+            false,
+        );
+        assert!(result.is_ok());
+
+        let process = &store.process_information[0];
+        assert_eq!(process.tags.len(), 1);
+        assert_eq!(process.tags[0], "new_tag");
+    }
+
+    #[test]
+    fn test_handle_tag_command_process_not_found() {
+        let mut store = LachesStore::default();
+
+        let result =
+            handle_tag_command(&mut store, "nonexistent_process", Some("work"), None, false);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("process 'nonexistent_process' not found"));
+    }
+
+    #[test]
+    fn test_handle_tag_command_empty_tag_string() {
+        let mut store = LachesStore::default();
+        let process = Process::new("test_process".to_string());
+        store.process_information.push(process);
+
+        let result = handle_tag_command(&mut store, "test_process", Some(""), None, false);
+        assert!(result.is_ok());
+
+        let process = &store.process_information[0];
+        assert_eq!(process.tags.len(), 0); // Empty strings filtered out
+    }
+
+    #[test]
+    fn test_handle_tag_command_list_tags_empty() {
+        let mut store = LachesStore::default();
+        let process = Process::new("test_process".to_string());
+        store.process_information.push(process);
+
+        let result = handle_tag_command(&mut store, "test_process", None, None, true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_handle_tag_command_list_tags_with_tags() {
+        let mut store = LachesStore::default();
+        let mut process = Process::new("test_process".to_string());
+        process.tags.push("work".to_string());
+        process.tags.push("dev".to_string());
+        store.process_information.push(process);
+
+        let result = handle_tag_command(&mut store, "test_process", None, None, true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_handle_tag_command_tags_with_commas_and_spaces() {
+        let mut store = LachesStore::default();
+        let process = Process::new("test_process".to_string());
+        store.process_information.push(process);
+
+        let result = handle_tag_command(
+            &mut store,
+            "test_process",
+            Some(" , tag1 ,, tag2 , "),
+            None,
+            false,
+        );
+        assert!(result.is_ok());
+
+        let process = &store.process_information[0];
+        assert_eq!(process.tags.len(), 2);
+        assert!(process.tags.contains(&"tag1".to_string()));
+        assert!(process.tags.contains(&"tag2".to_string()));
+    }
+}
