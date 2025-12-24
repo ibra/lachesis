@@ -1,9 +1,10 @@
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{hash_map::RandomState, HashMap},
     error::Error,
     fs::{self, File, OpenOptions},
+    hash::{BuildHasher, Hash, Hasher},
     io::{BufReader, Write},
     path::Path,
 };
@@ -58,12 +59,9 @@ pub fn get_hostname() -> String {
     "unknown".to_string()
 }
 
-/// Get a unique machine identifier combining hostname and a persistent random ID
-/// This ensures machines with the same hostname don't conflict
 pub fn get_machine_id(store_path: &Path) -> String {
     let machine_id_file = store_path.join(".machine_id");
 
-    // Try to read existing machine ID
     if let Ok(existing_id) = std::fs::read_to_string(&machine_id_file) {
         let trimmed = existing_id.trim();
         if !trimmed.is_empty() {
@@ -71,16 +69,21 @@ pub fn get_machine_id(store_path: &Path) -> String {
         }
     }
 
-    // Generate new machine ID: hostname + timestamp + process ID
     let hostname = get_hostname();
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_millis();
+        .as_nanos();
     let pid = std::process::id();
-    let machine_id = format!("{}_{}_{}", hostname, timestamp, pid);
 
-    // Try to save the machine ID for future use
+    let random_state = RandomState::new();
+    let mut hasher = random_state.build_hasher();
+    timestamp.hash(&mut hasher);
+    pid.hash(&mut hasher);
+    let random_component = hasher.finish();
+
+    let machine_id = format!("{}_{}_{}_{:x}", hostname, timestamp, pid, random_component);
+
     let _ = std::fs::create_dir_all(store_path);
     let _ = std::fs::write(&machine_id_file, &machine_id);
 
@@ -555,7 +558,6 @@ mod tests {
         let machine_id1 = get_machine_id(temp_dir1.path());
         let machine_id2 = get_machine_id(temp_dir2.path());
 
-        // Even with same hostname, different directories should get different IDs
         assert_ne!(machine_id1, machine_id2);
     }
 
