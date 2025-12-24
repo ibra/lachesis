@@ -3,6 +3,7 @@ use crate::{
     utils::confirm,
 };
 use std::env;
+use std::mem;
 use std::{error::Error, path::Path, process::Command};
 use sysinfo::{Pid, System};
 
@@ -27,6 +28,8 @@ pub fn start_monitoring(
         .expect("error: failed to execute laches_mon (monitoring daemon)");
 
     laches_store.daemon_pid = instance.id();
+    mem::forget(instance);
+
     Ok(())
 }
 
