@@ -21,7 +21,7 @@ impl Default for ProcessListOptions {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 pub enum ListMode {
     Whitelist,
     Blacklist,

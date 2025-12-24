@@ -40,6 +40,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             all_machines,
         } => list_processes(
             &laches_store,
+            &store_path,
             tag.as_deref(),
             *today,
             date.as_deref(),
