@@ -13,8 +13,13 @@ pub fn list_processes(
     tag_filter: Option<&str>,
     today_only: bool,
     date_filter: Option<&str>,
+    all_machines: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let all_windows = get_stored_processes(laches_store);
+    let all_windows = if all_machines {
+        laches_store.get_all_processes()
+    } else {
+        get_stored_processes(laches_store)
+    };
 
     let display_mode = if let Some(date) = date_filter {
         format!("Usage for {}", date)
@@ -31,12 +36,21 @@ pub fn list_processes(
         ListMode::Default => "Default",
     };
 
+    let machines_str = if all_machines {
+        format!(
+            " - All Machines ({} total)",
+            laches_store.machine_data.len()
+        )
+    } else {
+        String::new()
+    };
+
     if let Some(tag) = tag_filter {
         println!(
             "{}",
             format!(
-                "Tracked Window Usage - Tag: {} ({} Mode, {})",
-                tag, mode_str, display_mode
+                "Tracked Window Usage - Tag: {} ({} Mode, {}{})",
+                tag, mode_str, display_mode, machines_str
             )
             .bold()
             .cyan()
@@ -44,9 +58,12 @@ pub fn list_processes(
     } else {
         println!(
             "{}",
-            format!("Tracked Window Usage ({} Mode, {})", mode_str, display_mode)
-                .bold()
-                .cyan()
+            format!(
+                "Tracked Window Usage ({} Mode, {}{})",
+                mode_str, display_mode, machines_str
+            )
+            .bold()
+            .cyan()
         );
     }
     println!();

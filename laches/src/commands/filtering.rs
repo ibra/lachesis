@@ -1,8 +1,7 @@
-use std::error::Error;
-
-use crate::{cli::ListAction, store::LachesStore, utils::confirm};
+use crate::{cli::FilterListAction, store::LachesStore, utils::confirm};
 use colored::Colorize;
 use regex::Regex;
+use std::error::Error;
 
 /// Check if a process name matches any pattern in the list (supports both exact matches and regex)
 pub fn matches_any_pattern(process_name: &str, patterns: &[String]) -> bool {
@@ -22,19 +21,19 @@ pub fn matches_any_pattern(process_name: &str, patterns: &[String]) -> bool {
 
 pub fn handle_whitelist(
     laches_store: &mut LachesStore,
-    action: &ListAction,
+    action: &FilterListAction,
 ) -> Result<(), Box<dyn Error>> {
     match action {
-        ListAction::Add { process, regex } => {
+        FilterListAction::Add { process, regex } => {
             add_to_list(laches_store, process, *regex, true)?;
         }
-        ListAction::Remove { process } => {
+        FilterListAction::Remove { process } => {
             remove_from_list(laches_store, process, true)?;
         }
-        ListAction::List => {
+        FilterListAction::List => {
             list_patterns(laches_store, true)?;
         }
-        ListAction::Clear => {
+        FilterListAction::Clear => {
             clear_list(laches_store, true)?;
         }
     }
@@ -43,19 +42,19 @@ pub fn handle_whitelist(
 
 pub fn handle_blacklist(
     laches_store: &mut LachesStore,
-    action: &ListAction,
+    action: &FilterListAction,
 ) -> Result<(), Box<dyn Error>> {
     match action {
-        ListAction::Add { process, regex } => {
+        FilterListAction::Add { process, regex } => {
             add_to_list(laches_store, process, *regex, false)?;
         }
-        ListAction::Remove { process } => {
+        FilterListAction::Remove { process } => {
             remove_from_list(laches_store, process, false)?;
         }
-        ListAction::List => {
+        FilterListAction::List => {
             list_patterns(laches_store, false)?;
         }
-        ListAction::Clear => {
+        FilterListAction::Clear => {
             clear_list(laches_store, false)?;
         }
     }

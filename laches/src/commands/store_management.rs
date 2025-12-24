@@ -84,6 +84,7 @@ pub fn export_store(
     laches_store: &LachesStore,
     output_path: &str,
     duration: Option<&str>,
+    all_machines: bool,
 ) -> Result<(), Box<dyn Error>> {
     let cutoff_date = if let Some(duration_str) = duration {
         let days = parse_duration(duration_str)?;
@@ -95,8 +96,13 @@ pub fn export_store(
 
     let mut export_processes: Vec<Process> = Vec::new();
 
-    let current_machine_processes = laches_store.get_current_machine_processes();
-    for process in &current_machine_processes {
+    let processes_to_export = if all_machines {
+        laches_store.get_all_processes()
+    } else {
+        laches_store.get_current_machine_processes()
+    };
+
+    for process in &processes_to_export {
         let mut exported_process = process.clone();
 
         if let Some(ref cutoff) = cutoff_date {
@@ -125,12 +131,19 @@ pub fn export_store(
         " (all time)".to_string()
     };
 
+    let machines_text = if all_machines {
+        format!(" from {} machine(s)", laches_store.machine_data.len())
+    } else {
+        String::new()
+    };
+
     println!(
         "{}",
         format!(
-            "✓ Exported {} process(es){} to '{}'",
+            "✓ Exported {} process(es){}{} to '{}'",
             export_processes.len(),
             duration_text,
+            machines_text,
             output_path
         )
         .green()
@@ -218,7 +231,7 @@ mod tests {
             .machine_data
             .insert(hostname, vec![process1, process2]);
 
-        let result = export_store(&store, output_path.to_str().unwrap(), None);
+        let result = export_store(&store, output_path.to_str().unwrap(), None, false);
         assert!(result.is_ok());
         assert!(output_path.exists());
 
@@ -250,7 +263,7 @@ mod tests {
         store.machine_data.insert(hostname, vec![process]);
 
         // Export only last 5 days
-        let result = export_store(&store, output_path.to_str().unwrap(), Some("5d"));
+        let result = export_store(&store, output_path.to_str().unwrap(), Some("5d"), false);
         assert!(result.is_ok());
 
         let exported_data = std::fs::read_to_string(&output_path).unwrap();
@@ -278,7 +291,7 @@ mod tests {
             .machine_data
             .insert(hostname, vec![process_with_time, process_without_time]);
 
-        let result = export_store(&store, output_path.to_str().unwrap(), None);
+        let result = export_store(&store, output_path.to_str().unwrap(), None, false);
         assert!(result.is_ok());
 
         let exported_data = std::fs::read_to_string(&output_path).unwrap();
@@ -307,7 +320,7 @@ mod tests {
             .machine_data
             .insert(hostname, vec![process1, process2, process3]);
 
-        let result = export_store(&store, output_path.to_str().unwrap(), None);
+        let result = export_store(&store, output_path.to_str().unwrap(), None, false);
         assert!(result.is_ok());
 
         let exported_data = std::fs::read_to_string(&output_path).unwrap();
@@ -361,7 +374,7 @@ mod tests {
 
         let store = LachesStore::default();
 
-        let result = export_store(&store, output_path.to_str().unwrap(), None);
+        let result = export_store(&store, output_path.to_str().unwrap(), None, false);
         assert!(result.is_ok());
 
         let exported_data = std::fs::read_to_string(&output_path).unwrap();
