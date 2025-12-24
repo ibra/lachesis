@@ -19,8 +19,8 @@ pub fn start_monitoring(
 
     let mut monitor = Command::new(exe_path);
     monitor
-        .arg(&laches_store.update_interval.to_string())
-        .arg(&store_path.join(STORE_NAME));
+        .arg(laches_store.update_interval.to_string())
+        .arg(store_path.join(STORE_NAME));
 
     let instance = monitor
         .spawn()

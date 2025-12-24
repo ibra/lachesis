@@ -35,6 +35,7 @@ pub fn show_config(laches_store: &LachesStore, store_path: &Path) -> Result<(), 
     Ok(())
 }
 
+#[allow(unused_variables)]
 pub fn set_store_path(store_path: &Path, target_path: &str) -> Result<(), Box<dyn Error>> {
     // todo: implement changing of paths
     Ok(())

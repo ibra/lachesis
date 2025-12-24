@@ -153,7 +153,7 @@ impl LachesStore {
     /// Get mutable reference to processes for the current machine using machine_id
     pub fn get_machine_processes_mut(&mut self, store_path: &Path) -> &mut Vec<Process> {
         let machine_id = get_machine_id(store_path);
-        self.machine_data.entry(machine_id).or_insert_with(Vec::new)
+        self.machine_data.entry(machine_id).or_default()
     }
 
     /// Get processes for the current machine (uses default path from store location)
@@ -170,7 +170,7 @@ impl LachesStore {
     /// For backwards compatibility - prefer get_machine_processes_mut
     pub fn get_current_machine_processes_mut(&mut self) -> &mut Vec<Process> {
         let hostname = get_hostname();
-        self.machine_data.entry(hostname).or_insert_with(Vec::new)
+        self.machine_data.entry(hostname).or_default()
     }
 
     /// Get all processes from all machines (useful for viewing data from all synced machines)
@@ -293,7 +293,7 @@ mod tests {
     #[test]
     fn test_laches_store_default() {
         let store = LachesStore::default();
-        assert_eq!(store.autostart, true);
+        assert!(store.autostart);
         assert_eq!(store.update_interval, 5);
         assert_eq!(store.machine_data.len(), 0);
         assert_eq!(store.daemon_pid, u32::MAX);
@@ -355,7 +355,7 @@ mod tests {
         // Store should now exist with default values
         assert!(store_path.join(STORE_NAME).exists());
         assert_eq!(store.update_interval, 5);
-        assert_eq!(store.autostart, true);
+        assert!(store.autostart);
     }
 
     #[test]
