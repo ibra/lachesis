@@ -2,102 +2,182 @@
 
 ## lachesis (la·kuh·suhs)
 
-lachesis is a completely cli-based, customizable, automatic time tracking tool designed for tracking and viewing screentime. it tracks your process usage and provides an intuitive command line interface for managing and viewing time spent on applications.
+lachesis is a completely cli-based, customizable, automatic time tracking tool designed for tracking and viewing screentime. it tracks your process usage and provides an intuitive command line interface for managing, filtering, and exporting time spent on applications.
 
 ## features
 
-- **automatic time tracking**: constant running daemon (laches_mon) that keeps track of active windows. (default interval: 5000ms).
-- **tags**: tag specific windows and group times together
-- **customizable rules**: set up rules for tracking or ignoring specific programs. (!! regex support planned)
-- **backup and export**: easily export time tracking data in json or html.
-- **cross-platform** : support across windows and linux (macOS planned).
-- **idle tracking (!! planned):** ability to automatically tag time as "active" or "idle".
+- **automatic time tracking**: background monitor (`laches_mon`) that tracks active processes at a fixed interval.
+- **tags**: tag processes and group tracked time together.
+- **filtering rules**: whitelist or blacklist specific processes (with optional regex matching).
+- **data export**: export tracked data to json.
+- **cross-platform**: windows and linux support with the ability to aggregate data across machines if synced.
+- **(!! planned) idle tracking**: automatic detection of idle vs active time.
 
 ## usage
 
-### starting and stopping
+### starting and stopping monitoring
 
-use `laches start` to begin monitoring your time tracking, and `laches stop` to stop it.
+start and stop the background monitor:
 
 ```bash
 laches start
-# started monitoring window usage.
+# started monitoring process usage.
 
 laches stop
-# stopped monitoring window usage.
+# stopped monitoring process usage.
 ```
 
-### autostart
+### listing tracked data
 
-enable automatic startup when you boot your system with:
-
-```bash
-laches autostart yes
-# enabled booting on startup.
-```
-
-to disable autostart:
-
-```bash
-laches autostart no
-# stopped booting on startup.
-```
-
-### list/watch
-
-see all the applications currently being tracked:
+list tracked applications:
 
 ```bash
 laches list
 ```
 
-### filtering
-
-blacklist a specific app:
+filter the list by tag:
 
 ```bash
-laches mode blacklist
-# sets to blacklist mode
-laches blacklist add test.exe
-# stops listing metrics for process "test.exe"
+laches list --tag work
 ```
 
-or use wildcards for patterns (regex support planned!)
+show only today’s activity:
 
 ```bash
-laches mode whitelist
-# sets to whitelist mode
-lachesis whitelist add "^chrome.*" --regex
-# only lists metrics for processes matching the pattern "^chrome.*" and other whitelisted patterns
+laches list --today
+```
+
+list data for a specific date:
+
+```bash
+laches list --date 2024-01-01
+```
+
+include data from all machines:
+
+```bash
+laches list --all-machines
+```
+
+### tagging processes
+
+add or remove tags from a process:
+
+```bash
+laches tag firefox --add browser
+laches tag firefox --remove browser
+```
+
+list tags for a process:
+
+```bash
+laches tag firefox --list
+```
+
+### filtering (whitelist / blacklist)
+
+set the global filtering mode:
+
+```bash
+laches config mode whitelist
+# or
+laches config mode blacklist
+```
+
+#### whitelist
+
+only track explicitly allowed processes:
+
+```bash
+laches config whitelist add firefox
+laches config whitelist add "^chrome.*" --regex
+```
+
+remove or inspect whitelist entries:
+
+```bash
+laches config whitelist remove firefox
+laches config whitelist list
+laches config whitelist clear
+```
+
+#### blacklist
+
+track everything except excluded processes:
+
+```bash
+laches config blacklist add discord
+```
+
+manage blacklist entries:
+
+```bash
+laches config blacklist remove discord
+laches config blacklist list
+laches config blacklist clear
+```
+
+### configuration
+
+show the current configuration:
+
+```bash
+laches config show
+```
+
+set a custom data storage path:
+
+```bash
+laches config set-store-path /path/to/store
+```
+
+enable or disable autostart:
+
+```bash
+laches config autostart yes
+laches config autostart no
 ```
 
 ### exporting data
 
-export your time tracking data to a file:
+export tracked data to a file:
 
 ```bash
-laches export out.json --duration=7d
-# exported past 7 days of time tracking information into "out.json"!
+laches data export out.json
 ```
 
-future options will include html exports.
+export only a specific duration:
+
+```bash
+laches data export out.json --duration 7d
+```
+
+include data from all machines:
+
+```bash
+laches data export out.json --all-machines
+```
 
 ### deleting data
 
-delete time-tracking activity for the past 7 days (default) with:
+delete data for a given duration:
 
 ```bash
-laches delete --duration=7d
-# are you sure you want to delete time tracking activity older than the past 7 days? (y/N)
+laches data delete --duration 7d
 ```
 
-or delete all recorded time:
+delete all stored data:
 
 ```bash
-laches delete all
-# are you sure you want to delete time tracking activity for all time? (y/N)
+laches data delete --all
+```
+
+reset **all** stored data and state:
+
+```bash
+laches data reset
 ```
 
 ## development
 
-contributions are welcome. if you have ideas or improvements, check out the issue tracker and start contributing. or, you can report issues or request features by making an [issue](https://github.com/ibra/lachesis/issues/new?template=Blank+issue).
+contributions are welcome. if you have ideas or improvements, check out the issue tracker and start contributing. you can also report bugs or request features by opening an [issue](https://github.com/ibra/lachesis/issues/new?template=Blank+issue).
