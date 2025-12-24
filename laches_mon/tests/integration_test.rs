@@ -61,7 +61,7 @@ fn test_add_process_to_store() {
     let final_store: LachesStore = serde_json::from_reader(file).unwrap();
     assert_eq!(final_store.process_information.len(), 1);
     assert_eq!(final_store.process_information[0].title, "test_process");
-    assert_eq!(final_store.process_information[0].uptime, 5);
+    assert_eq!(final_store.process_information[0].get_total_usage(), 5);
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn test_update_existing_process() {
     let file = File::open(&file_path).unwrap();
     let final_store: LachesStore = serde_json::from_reader(file).unwrap();
     assert_eq!(final_store.process_information.len(), 1);
-    assert_eq!(final_store.process_information[0].uptime, 15);
+    assert_eq!(final_store.process_information[0].get_total_usage(), 15);
 }
 
 #[test]
@@ -146,7 +146,7 @@ fn test_multiple_tick_cycles() {
     let final_store: LachesStore = serde_json::from_reader(file).unwrap();
     assert_eq!(final_store.process_information.len(), 1);
     assert_eq!(final_store.process_information[0].title, "test_process");
-    assert_eq!(final_store.process_information[0].uptime, 15); // 3 cycles * 5 seconds
+    assert_eq!(final_store.process_information[0].get_total_usage(), 15); // 3 cycles * 5 seconds
 }
 
 #[test]
@@ -155,7 +155,7 @@ fn test_get_active_processes_integration() {
 
     for process in &processes {
         assert!(!process.title.is_empty());
-        assert_eq!(process.uptime, 0); // new processes start with 0 uptime
+        assert_eq!(process.get_total_usage(), 0); // new processes start with 0 uptime
     }
 }
 
@@ -231,5 +231,5 @@ fn test_store_persistence() {
         loaded_store.process_information[0].title,
         "persistent_process"
     );
-    assert_eq!(loaded_store.process_information[0].uptime, 100);
+    assert_eq!(loaded_store.process_information[0].get_total_usage(), 100);
 }

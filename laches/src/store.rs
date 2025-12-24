@@ -18,9 +18,6 @@ pub struct Process {
     pub title: String,
     #[tabled(skip)]
     #[serde(default)]
-    pub uptime: u64,
-    #[tabled(skip)]
-    #[serde(default)]
     pub daily_usage: HashMap<String, u64>,
     #[tabled(skip)]
     #[serde(default)]
@@ -39,7 +36,6 @@ impl Process {
         let today = Local::now().format("%Y-%m-%d").to_string();
         Self {
             title,
-            uptime: 0,
             daily_usage: HashMap::new(),
             tags: Vec::new(),
             last_seen: today,
@@ -59,7 +55,6 @@ impl Process {
         let today = Local::now().format("%Y-%m-%d").to_string();
         let current = self.daily_usage.get(&today).unwrap_or(&0);
         self.daily_usage.insert(today.clone(), current + seconds);
-        self.uptime += seconds;
         self.last_seen = today;
     }
 }
@@ -143,7 +138,7 @@ mod tests {
     fn test_process_new() {
         let process = Process::new("test_process".to_string());
         assert_eq!(process.title, "test_process");
-        assert_eq!(process.uptime, 0);
+        assert_eq!(process.get_total_usage(), 0);
         assert_eq!(process.daily_usage.len(), 0);
         assert_eq!(process.tags.len(), 0);
         assert!(!process.last_seen.is_empty());
@@ -154,7 +149,7 @@ mod tests {
         let mut process = Process::new("test_process".to_string());
         process.add_time(100);
 
-        assert_eq!(process.uptime, 100);
+        assert_eq!(process.get_total_usage(), 100);
         assert_eq!(process.get_today_usage(), 100);
         assert_eq!(process.get_total_usage(), 100);
     }
@@ -166,7 +161,7 @@ mod tests {
         process.add_time(50);
         process.add_time(25);
 
-        assert_eq!(process.uptime, 175);
+        assert_eq!(process.get_total_usage(), 175);
         assert_eq!(process.get_today_usage(), 175);
         assert_eq!(process.get_total_usage(), 175);
     }
@@ -235,7 +230,7 @@ mod tests {
         assert_eq!(loaded_store.update_interval, 10);
         assert_eq!(loaded_store.process_information.len(), 1);
         assert_eq!(loaded_store.process_information[0].title, "test_process");
-        assert_eq!(loaded_store.process_information[0].uptime, 500);
+        assert_eq!(loaded_store.process_information[0].get_total_usage(), 500);
     }
 
     #[test]
@@ -287,7 +282,7 @@ mod tests {
         let deserialized: Process = serde_json::from_str(&serialized).unwrap();
 
         assert_eq!(deserialized.title, "test_process");
-        assert_eq!(deserialized.uptime, 100);
+        assert_eq!(deserialized.get_total_usage(), 100);
         assert_eq!(deserialized.tags.len(), 2);
         assert_eq!(deserialized.tags[0], "tag1");
     }

@@ -34,7 +34,6 @@ pub fn confirm_delete_store(
             let total_processes = laches_store.process_information.len();
             for process in &mut laches_store.process_information {
                 process.daily_usage.clear();
-                process.uptime = 0;
             }
             println!(
                 "info: deleted all recorded time from {} process(es)",
@@ -62,8 +61,7 @@ pub fn confirm_delete_store(
                     .collect();
 
                 for date in dates_to_remove {
-                    if let Some(usage) = process.daily_usage.remove(&date) {
-                        process.uptime = process.uptime.saturating_sub(usage);
+                    if let Some(_usage) = process.daily_usage.remove(&date) {
                         total_deleted += 1;
                     }
                 }
@@ -105,11 +103,9 @@ pub fn export_store(
                 .filter(|(date, _)| date.as_str() >= cutoff.as_str())
                 .map(|(k, v)| (k.clone(), *v))
                 .collect();
-
-            exported_process.uptime = exported_process.daily_usage.values().sum();
         }
 
-        if exported_process.uptime > 0 {
+        if exported_process.get_total_usage() > 0 {
             export_processes.push(exported_process);
         }
     }
@@ -245,7 +241,6 @@ mod tests {
             .to_string();
         process.daily_usage.insert(old_date.clone(), 5000);
 
-        process.uptime = 6000;
         store.process_information.push(process);
 
         // Export only last 5 days

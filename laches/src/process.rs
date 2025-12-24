@@ -98,9 +98,9 @@ mod tests {
     fn test_get_active_processes_creates_new_processes() {
         let processes = get_active_processes();
 
-        // Each process should be newly created with uptime of 0
+        // Each process should be newly created with total usage of 0
         for process in &processes {
-            assert_eq!(process.uptime, 0);
+            assert_eq!(process.get_total_usage(), 0);
             assert_eq!(process.daily_usage.len(), 0);
             assert_eq!(process.tags.len(), 0);
         }
