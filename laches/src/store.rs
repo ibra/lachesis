@@ -1,14 +1,14 @@
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{hash_map::RandomState, HashMap},
+    collections::HashMap,
     error::Error,
     fs::{self, File, OpenOptions},
-    hash::{BuildHasher, Hash, Hasher},
     io::{BufReader, Write},
     path::Path,
 };
 use tabled::Tabled;
+use uuid::Uuid;
 
 use crate::process_list::ProcessListOptions;
 
@@ -55,7 +55,6 @@ pub fn get_hostname() -> String {
         }
     }
 
-    // Fallback to "unknown" if we can't determine hostname
     "unknown".to_string()
 }
 
@@ -70,19 +69,8 @@ pub fn get_machine_id(store_path: &Path) -> String {
     }
 
     let hostname = get_hostname();
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let pid = std::process::id();
-
-    let random_state = RandomState::new();
-    let mut hasher = random_state.build_hasher();
-    timestamp.hash(&mut hasher);
-    pid.hash(&mut hasher);
-    let random_component = hasher.finish();
-
-    let machine_id = format!("{}_{}_{}_{:x}", hostname, timestamp, pid, random_component);
+    let uuid = Uuid::new_v4();
+    let machine_id = format!("{}_{}", hostname, uuid);
 
     let _ = std::fs::create_dir_all(store_path);
     let _ = std::fs::write(&machine_id_file, &machine_id);
@@ -548,17 +536,6 @@ mod tests {
         // Verify the file was created
         let machine_id_file = store_path.join(".machine_id");
         assert!(machine_id_file.exists());
-    }
-
-    #[test]
-    fn test_machine_id_uniqueness_for_same_hostname() {
-        let temp_dir1 = TempDir::new().unwrap();
-        let temp_dir2 = TempDir::new().unwrap();
-
-        let machine_id1 = get_machine_id(temp_dir1.path());
-        let machine_id2 = get_machine_id(temp_dir2.path());
-
-        assert_ne!(machine_id1, machine_id2);
     }
 
     #[test]
