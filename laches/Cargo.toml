@@ -1,21 +1,23 @@
 [package]
 name = "laches"
-authors = ["Ibrahim Hisham <ibrahim.hisham@proton.me>"]
 version = "0.1.0"
 edition = "2021"
+authors = ["Ibrahim Hisham <ibrahim.hisham@proton.me>"]
+license = "MIT"
 
 [dependencies]
 auto-launch.workspace = true
 clap.workspace = true
-dirs = "5.0.1"
-sysinfo = "0.30.13"
+regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tabled = "0.16.0"
+uuid.workspace = true
+
 chrono = { version = "0.4", features = ["serde"] }
 colored = "2.1"
-regex.workspace = true
-uuid.workspace = true
+dirs = "5.0.1"
+sysinfo = "0.30.13"
+tabled = "0.16.0"
 
 [dev-dependencies]
 tempfile = "3.8"

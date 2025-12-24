@@ -1,11 +1,14 @@
 [workspace]
-members = ["laches", "laches_mon"]
 resolver = "2"
+members = [
+    "laches",
+    "laches_mon",
+]
 
 [workspace.dependencies]
+auto-launch = "0.5"
+clap = { version = "4.1.6", features = ["cargo", "derive"] }
+regex = "1.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
-clap = { version = "4.1.6", features = ["cargo", "derive"] }
-auto-launch = "0.5"
 uuid = { version = "1", features = ["v4"] }
-regex = "1.10"
