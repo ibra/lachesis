@@ -31,8 +31,9 @@ pub fn confirm_delete_store(
 
     if delete_all {
         if confirm("are you sure you want to delete all recorded time? [y/N]") {
-            let total_processes = laches_store.process_information.len();
-            for process in &mut laches_store.process_information {
+            let current_machine_processes = laches_store.get_current_machine_processes_mut();
+            let total_processes = current_machine_processes.len();
+            for process in current_machine_processes.iter_mut() {
                 process.daily_usage.clear();
             }
             println!(
@@ -52,7 +53,8 @@ pub fn confirm_delete_store(
             days, cutoff_str
         )) {
             let mut total_deleted = 0;
-            for process in &mut laches_store.process_information {
+            let current_machine_processes = laches_store.get_current_machine_processes_mut();
+            for process in current_machine_processes.iter_mut() {
                 let dates_to_remove: Vec<String> = process
                     .daily_usage
                     .keys()
@@ -93,7 +95,8 @@ pub fn export_store(
 
     let mut export_processes: Vec<Process> = Vec::new();
 
-    for process in &laches_store.process_information {
+    let current_machine_processes = laches_store.get_current_machine_processes();
+    for process in &current_machine_processes {
         let mut exported_process = process.clone();
 
         if let Some(ref cutoff) = cutoff_date {
@@ -210,8 +213,10 @@ mod tests {
         process1.add_time(3600);
         let mut process2 = Process::new("process2".to_string());
         process2.add_time(7200);
-        store.process_information.push(process1);
-        store.process_information.push(process2);
+        let hostname = crate::store::get_hostname();
+        store
+            .machine_data
+            .insert(hostname, vec![process1, process2]);
 
         let result = export_store(&store, output_path.to_str().unwrap(), None);
         assert!(result.is_ok());
@@ -241,7 +246,8 @@ mod tests {
             .to_string();
         process.daily_usage.insert(old_date.clone(), 5000);
 
-        store.process_information.push(process);
+        let hostname = crate::store::get_hostname();
+        store.machine_data.insert(hostname, vec![process]);
 
         // Export only last 5 days
         let result = export_store(&store, output_path.to_str().unwrap(), Some("5d"));
@@ -267,8 +273,10 @@ mod tests {
         process_with_time.add_time(1000);
         let process_without_time = Process::new("inactive".to_string());
 
-        store.process_information.push(process_with_time);
-        store.process_information.push(process_without_time);
+        let hostname = crate::store::get_hostname();
+        store
+            .machine_data
+            .insert(hostname, vec![process_with_time, process_without_time]);
 
         let result = export_store(&store, output_path.to_str().unwrap(), None);
         assert!(result.is_ok());
@@ -294,9 +302,10 @@ mod tests {
         let mut process3 = Process::new("medium_usage".to_string());
         process3.add_time(500);
 
-        store.process_information.push(process1);
-        store.process_information.push(process2);
-        store.process_information.push(process3);
+        let hostname = crate::store::get_hostname();
+        store
+            .machine_data
+            .insert(hostname, vec![process1, process2, process3]);
 
         let result = export_store(&store, output_path.to_str().unwrap(), None);
         assert!(result.is_ok());
@@ -318,8 +327,10 @@ mod tests {
         let mut process2 = Process::new("process2".to_string());
         process2.add_time(2000);
 
-        store.process_information.push(process1);
-        store.process_information.push(process2);
+        let hostname = crate::store::get_hostname();
+        store
+            .machine_data
+            .insert(hostname, vec![process1, process2]);
 
         // This test would require mocking user input, so we'll just verify
         // the function signature and error handling

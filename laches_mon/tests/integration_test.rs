@@ -1,6 +1,6 @@
 use laches::{
     process::get_active_processes,
-    store::{LachesStore, Process, STORE_NAME},
+    store::{get_machine_id, LachesStore, Process, STORE_NAME},
 };
 use std::fs::File;
 use std::io::Write;
@@ -13,7 +13,6 @@ fn test_store_exists_and_valid() {
     let temp_dir = TempDir::new().unwrap();
     let store_path = temp_dir.path();
 
-    // Create a valid store file
     let mut store = LachesStore::default();
     store.update_interval = 5;
 
@@ -34,7 +33,6 @@ fn test_add_process_to_store() {
     let temp_dir = TempDir::new().unwrap();
     let store_path = temp_dir.path();
 
-    // Create initial store
     let mut store = LachesStore::default();
     store.update_interval = 5;
 
@@ -43,25 +41,25 @@ fn test_add_process_to_store() {
     let serialized = serde_json::to_string(&store).unwrap();
     file.write_all(serialized.as_bytes()).unwrap();
 
-    // Read and modify the store (simulating what tick() does)
     let file = File::open(&file_path).unwrap();
     let mut loaded_store: LachesStore = serde_json::from_reader(file).unwrap();
 
     let mut new_process = Process::new("test_process".to_string());
     new_process.add_time(5);
-    loaded_store.process_information.push(new_process);
+    let current_machine_processes = loaded_store.get_machine_processes_mut(store_path);
+    current_machine_processes.push(new_process);
 
-    // Write back
     let mut file = File::create(&file_path).unwrap();
     let serialized = serde_json::to_string(&loaded_store).unwrap();
     file.write_all(serialized.as_bytes()).unwrap();
 
-    // Verify the process was added
     let file = File::open(&file_path).unwrap();
     let final_store: LachesStore = serde_json::from_reader(file).unwrap();
-    assert_eq!(final_store.process_information.len(), 1);
-    assert_eq!(final_store.process_information[0].title, "test_process");
-    assert_eq!(final_store.process_information[0].get_total_usage(), 5);
+    let machine_id = get_machine_id(store_path);
+    let processes = final_store.machine_data.get(&machine_id).unwrap();
+    assert_eq!(processes.len(), 1);
+    assert_eq!(processes[0].title, "test_process");
+    assert_eq!(processes[0].get_total_usage(), 5);
 }
 
 #[test]
@@ -69,22 +67,22 @@ fn test_update_existing_process() {
     let temp_dir = TempDir::new().unwrap();
     let store_path = temp_dir.path();
 
-    // Create store with an existing process
     let mut store = LachesStore::default();
+    let machine_id = get_machine_id(store_path);
     let mut process = Process::new("existing_process".to_string());
     process.add_time(10);
-    store.process_information.push(process);
+    store.machine_data.insert(machine_id.clone(), vec![process]);
 
     let file_path = store_path.join(STORE_NAME);
     let mut file = File::create(&file_path).unwrap();
     let serialized = serde_json::to_string(&store).unwrap();
     file.write_all(serialized.as_bytes()).unwrap();
 
-    // Simulate tick: read, update existing process, write
     let file = File::open(&file_path).unwrap();
     let mut loaded_store: LachesStore = serde_json::from_reader(file).unwrap();
 
-    for stored_process in &mut loaded_store.process_information {
+    let current_machine_processes = loaded_store.get_machine_processes_mut(store_path);
+    for stored_process in current_machine_processes.iter_mut() {
         if stored_process.title == "existing_process" {
             stored_process.add_time(5);
             break;
@@ -95,11 +93,12 @@ fn test_update_existing_process() {
     let serialized = serde_json::to_string(&loaded_store).unwrap();
     file.write_all(serialized.as_bytes()).unwrap();
 
-    // Verify the update
     let file = File::open(&file_path).unwrap();
     let final_store: LachesStore = serde_json::from_reader(file).unwrap();
-    assert_eq!(final_store.process_information.len(), 1);
-    assert_eq!(final_store.process_information[0].get_total_usage(), 15);
+    let machine_id = get_machine_id(store_path);
+    let processes = final_store.machine_data.get(&machine_id).unwrap();
+    assert_eq!(processes.len(), 1);
+    assert_eq!(processes[0].get_total_usage(), 15);
 }
 
 #[test]
@@ -107,7 +106,6 @@ fn test_multiple_tick_cycles() {
     let temp_dir = TempDir::new().unwrap();
     let store_path = temp_dir.path();
 
-    // Create initial store
     let mut store = LachesStore::default();
     store.update_interval = 5;
 
@@ -116,14 +114,13 @@ fn test_multiple_tick_cycles() {
     let serialized = serde_json::to_string(&store).unwrap();
     file.write_all(serialized.as_bytes()).unwrap();
 
-    // Simulate multiple tick cycles
     for _cycle in 1..=3 {
         let file = File::open(&file_path).unwrap();
         let mut loaded_store: LachesStore = serde_json::from_reader(file).unwrap();
 
-        // Add or update a process
+        let current_machine_processes = loaded_store.get_machine_processes_mut(store_path);
         let mut found = false;
-        for stored_process in &mut loaded_store.process_information {
+        for stored_process in current_machine_processes.iter_mut() {
             if stored_process.title == "test_process" {
                 stored_process.add_time(store.update_interval);
                 found = true;
@@ -134,7 +131,7 @@ fn test_multiple_tick_cycles() {
         if !found {
             let mut new_process = Process::new("test_process".to_string());
             new_process.add_time(store.update_interval);
-            loaded_store.process_information.push(new_process);
+            current_machine_processes.push(new_process);
         }
 
         let mut file = File::create(&file_path).unwrap();
@@ -144,9 +141,11 @@ fn test_multiple_tick_cycles() {
 
     let file = File::open(&file_path).unwrap();
     let final_store: LachesStore = serde_json::from_reader(file).unwrap();
-    assert_eq!(final_store.process_information.len(), 1);
-    assert_eq!(final_store.process_information[0].title, "test_process");
-    assert_eq!(final_store.process_information[0].get_total_usage(), 15); // 3 cycles * 5 seconds
+    let machine_id = get_machine_id(store_path);
+    let processes = final_store.machine_data.get(&machine_id).unwrap();
+    assert_eq!(processes.len(), 1);
+    assert_eq!(processes[0].title, "test_process");
+    assert_eq!(processes[0].get_total_usage(), 15); // 3 cycles * 5 seconds
 }
 
 #[test]
@@ -173,7 +172,6 @@ fn test_concurrent_process_tracking() {
     let serialized = serde_json::to_string(&store).unwrap();
     file.write_all(serialized.as_bytes()).unwrap();
 
-    // Simulate tracking multiple processes
     let processes_to_track = vec!["process1", "process2", "process3"];
 
     for process_name in &processes_to_track {
@@ -182,23 +180,21 @@ fn test_concurrent_process_tracking() {
 
         let mut new_process = Process::new(process_name.to_string());
         new_process.add_time(5);
-        loaded_store.process_information.push(new_process);
+        let current_machine_processes = loaded_store.get_machine_processes_mut(store_path);
+        current_machine_processes.push(new_process);
 
         let mut file = File::create(&file_path).unwrap();
         let serialized = serde_json::to_string(&loaded_store).unwrap();
         file.write_all(serialized.as_bytes()).unwrap();
     }
 
-    // Verify all processes were tracked
     let file = File::open(&file_path).unwrap();
     let final_store: LachesStore = serde_json::from_reader(file).unwrap();
-    assert_eq!(final_store.process_information.len(), 3);
+    let machine_id = get_machine_id(store_path);
+    let processes = final_store.machine_data.get(&machine_id).unwrap();
+    assert_eq!(processes.len(), 3);
 
-    let titles: Vec<String> = final_store
-        .process_information
-        .iter()
-        .map(|p| p.title.clone())
-        .collect();
+    let titles: Vec<String> = processes.iter().map(|p| p.title.clone()).collect();
 
     for process_name in &processes_to_track {
         assert!(titles.contains(&process_name.to_string()));
@@ -210,11 +206,11 @@ fn test_store_persistence() {
     let temp_dir = TempDir::new().unwrap();
     let store_path = temp_dir.path();
 
-    // Create and save store
     let mut store = LachesStore::default();
+    let machine_id = get_machine_id(store_path);
     let mut process = Process::new("persistent_process".to_string());
     process.add_time(100);
-    store.process_information.push(process);
+    store.machine_data.insert(machine_id.clone(), vec![process]);
 
     let file_path = store_path.join(STORE_NAME);
     let mut file = File::create(&file_path).unwrap();
@@ -226,10 +222,9 @@ fn test_store_persistence() {
     let file = File::open(&file_path).unwrap();
     let loaded_store: LachesStore = serde_json::from_reader(file).unwrap();
 
-    assert_eq!(loaded_store.process_information.len(), 1);
-    assert_eq!(
-        loaded_store.process_information[0].title,
-        "persistent_process"
-    );
-    assert_eq!(loaded_store.process_information[0].get_total_usage(), 100);
+    let machine_id = get_machine_id(store_path);
+    let processes = loaded_store.machine_data.get(&machine_id).unwrap();
+    assert_eq!(processes.len(), 1);
+    assert_eq!(processes[0].title, "persistent_process");
+    assert_eq!(processes[0].get_total_usage(), 100);
 }

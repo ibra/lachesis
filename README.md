@@ -2,8 +2,7 @@
 
 ## lachesis (la·kuh·suhs)
 
-lachesis is a completely cli-based, customizable, automatic time tracking tool designed for tracking and viewing screentime. it automatically tracks your window usage and provides an intuitive command line interface for managing and viewing time
-spent on applications.
+lachesis is a completely cli-based, customizable, automatic time tracking tool designed for tracking and viewing screentime. it tracks your process usage and provides an intuitive command line interface for managing and viewing time spent on applications.
 
 ## features
 
@@ -57,15 +56,19 @@ laches list
 blacklist a specific app:
 
 ```bash
+laches mode blacklist
+# sets to blacklist mode
 laches blacklist add test.exe
-# stopped displaying metrics for process "test.exe"
+# stops listing metrics for process "test.exe"
 ```
 
 or use wildcards for patterns (regex support planned!)
 
 ```bash
+laches mode whitelist
+# sets to whitelist mode
 lachesis whitelist add "^chrome.*" --regex
-# stops displaying metrics for processes matching the pattern "^chrome.*".
+# only lists metrics for processes matching the pattern "^chrome.*" and other whitelisted patterns
 ```
 
 ### exporting data
@@ -97,5 +100,4 @@ laches delete all
 
 ## development
 
-- !! contributions are welcome: if you have ideas or improvements, check out the issue tracker and start contributing.
-- report issues or request features by making an [issue](https://github.com/ibra/lachesis/issues/new?template=Blank+issue).
+contributions are welcome. if you have ideas or improvements, check out the issue tracker and start contributing. or, you can report issues or request features by making an [issue](https://github.com/ibra/lachesis/issues/new?template=Blank+issue).

@@ -16,10 +16,13 @@ fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Er
     let reader = BufReader::new(&file);
     let mut r_store: LachesStore = serde_json::from_reader(reader)?;
 
+    let store_dir = store_path.parent().unwrap_or(store_path);
+    let current_machine_processes = r_store.get_machine_processes_mut(store_dir);
+
     for active_process in get_active_processes() {
         let mut found: bool = false;
 
-        for stored_process in &mut r_store.process_information {
+        for stored_process in current_machine_processes.iter_mut() {
             if active_process.title == stored_process.title {
                 stored_process.add_time(update_interval.as_secs());
                 found = true;
@@ -30,7 +33,7 @@ fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Er
         if !found {
             let mut new_process = active_process;
             new_process.add_time(update_interval.as_secs());
-            r_store.process_information.push(new_process);
+            current_machine_processes.push(new_process);
         }
     }
 

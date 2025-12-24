@@ -9,8 +9,8 @@ pub fn handle_tag_command(
     remove_tags: Option<&str>,
     list_tags: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let process = laches_store
-        .process_information
+    let current_machine_processes = laches_store.get_current_machine_processes_mut();
+    let process = current_machine_processes
         .iter_mut()
         .find(|p| p.title == process_name);
 
@@ -70,14 +70,15 @@ mod tests {
     #[test]
     fn test_handle_tag_command_add_single_tag() {
         let mut store = LachesStore::default();
+        let hostname = crate::store::get_hostname();
         let mut process = Process::new("test_process".to_string());
         process.add_time(100);
-        store.process_information.push(process);
+        store.machine_data.insert(hostname.clone(), vec![process]);
 
         let result = handle_tag_command(&mut store, "test_process", Some("work"), None, false);
         assert!(result.is_ok());
 
-        let process = &store.process_information[0];
+        let process = &store.machine_data.get(&hostname).unwrap()[0];
         assert_eq!(process.tags.len(), 1);
         assert_eq!(process.tags[0], "work");
     }
@@ -85,9 +86,10 @@ mod tests {
     #[test]
     fn test_handle_tag_command_add_multiple_tags() {
         let mut store = LachesStore::default();
+        let hostname = crate::store::get_hostname();
         let mut process = Process::new("test_process".to_string());
         process.add_time(100);
-        store.process_information.push(process);
+        store.machine_data.insert(hostname.clone(), vec![process]);
 
         let result = handle_tag_command(
             &mut store,
@@ -98,7 +100,7 @@ mod tests {
         );
         assert!(result.is_ok());
 
-        let process = &store.process_information[0];
+        let process = &store.machine_data.get(&hostname).unwrap()[0];
         assert_eq!(process.tags.len(), 3);
         assert!(process.tags.contains(&"work".to_string()));
         assert!(process.tags.contains(&"personal".to_string()));
@@ -108,9 +110,10 @@ mod tests {
     #[test]
     fn test_handle_tag_command_add_tags_with_spaces() {
         let mut store = LachesStore::default();
+        let hostname = crate::store::get_hostname();
         let mut process = Process::new("test_process".to_string());
         process.add_time(100);
-        store.process_information.push(process);
+        store.machine_data.insert(hostname.clone(), vec![process]);
 
         let result = handle_tag_command(
             &mut store,
@@ -121,7 +124,7 @@ mod tests {
         );
         assert!(result.is_ok());
 
-        let process = &store.process_information[0];
+        let process = &store.machine_data.get(&hostname).unwrap()[0];
         assert_eq!(process.tags.len(), 3);
         assert!(process.tags.contains(&"work".to_string()));
         assert!(process.tags.contains(&"personal".to_string()));
@@ -131,14 +134,15 @@ mod tests {
     #[test]
     fn test_handle_tag_command_add_duplicate_tag() {
         let mut store = LachesStore::default();
+        let hostname = crate::store::get_hostname();
         let mut process = Process::new("test_process".to_string());
         process.tags.push("work".to_string());
-        store.process_information.push(process);
+        store.machine_data.insert(hostname.clone(), vec![process]);
 
         let result = handle_tag_command(&mut store, "test_process", Some("work"), None, false);
         assert!(result.is_ok());
 
-        let process = &store.process_information[0];
+        let process = &store.machine_data.get(&hostname).unwrap()[0];
         assert_eq!(process.tags.len(), 1); // Should not add duplicate
         assert_eq!(process.tags[0], "work");
     }
@@ -146,15 +150,16 @@ mod tests {
     #[test]
     fn test_handle_tag_command_remove_tag() {
         let mut store = LachesStore::default();
+        let hostname = crate::store::get_hostname();
         let mut process = Process::new("test_process".to_string());
         process.tags.push("work".to_string());
         process.tags.push("personal".to_string());
-        store.process_information.push(process);
+        store.machine_data.insert(hostname.clone(), vec![process]);
 
         let result = handle_tag_command(&mut store, "test_process", None, Some("work"), false);
         assert!(result.is_ok());
 
-        let process = &store.process_information[0];
+        let process = &store.machine_data.get(&hostname).unwrap()[0];
         assert_eq!(process.tags.len(), 1);
         assert_eq!(process.tags[0], "personal");
     }
@@ -162,16 +167,17 @@ mod tests {
     #[test]
     fn test_handle_tag_command_remove_multiple_tags() {
         let mut store = LachesStore::default();
+        let hostname = crate::store::get_hostname();
         let mut process = Process::new("test_process".to_string());
         process.tags.push("work".to_string());
         process.tags.push("personal".to_string());
         process.tags.push("dev".to_string());
-        store.process_information.push(process);
+        store.machine_data.insert(hostname.clone(), vec![process]);
 
         let result = handle_tag_command(&mut store, "test_process", None, Some("work,dev"), false);
         assert!(result.is_ok());
 
-        let process = &store.process_information[0];
+        let process = &store.machine_data.get(&hostname).unwrap()[0];
         assert_eq!(process.tags.len(), 1);
         assert_eq!(process.tags[0], "personal");
     }
@@ -179,15 +185,16 @@ mod tests {
     #[test]
     fn test_handle_tag_command_remove_nonexistent_tag() {
         let mut store = LachesStore::default();
+        let hostname = crate::store::get_hostname();
         let mut process = Process::new("test_process".to_string());
         process.tags.push("work".to_string());
-        store.process_information.push(process);
+        store.machine_data.insert(hostname.clone(), vec![process]);
 
         let result =
             handle_tag_command(&mut store, "test_process", None, Some("nonexistent"), false);
         assert!(result.is_ok());
 
-        let process = &store.process_information[0];
+        let process = &store.machine_data.get(&hostname).unwrap()[0];
         assert_eq!(process.tags.len(), 1); // Tag unchanged
         assert_eq!(process.tags[0], "work");
     }
@@ -195,9 +202,10 @@ mod tests {
     #[test]
     fn test_handle_tag_command_add_and_remove_simultaneously() {
         let mut store = LachesStore::default();
+        let hostname = crate::store::get_hostname();
         let mut process = Process::new("test_process".to_string());
         process.tags.push("old_tag".to_string());
-        store.process_information.push(process);
+        store.machine_data.insert(hostname.clone(), vec![process]);
 
         let result = handle_tag_command(
             &mut store,
@@ -208,7 +216,7 @@ mod tests {
         );
         assert!(result.is_ok());
 
-        let process = &store.process_information[0];
+        let process = &store.machine_data.get(&hostname).unwrap()[0];
         assert_eq!(process.tags.len(), 1);
         assert_eq!(process.tags[0], "new_tag");
     }
@@ -229,21 +237,23 @@ mod tests {
     #[test]
     fn test_handle_tag_command_empty_tag_string() {
         let mut store = LachesStore::default();
+        let hostname = crate::store::get_hostname();
         let process = Process::new("test_process".to_string());
-        store.process_information.push(process);
+        store.machine_data.insert(hostname.clone(), vec![process]);
 
         let result = handle_tag_command(&mut store, "test_process", Some(""), None, false);
         assert!(result.is_ok());
 
-        let process = &store.process_information[0];
+        let process = &store.machine_data.get(&hostname).unwrap()[0];
         assert_eq!(process.tags.len(), 0); // Empty strings filtered out
     }
 
     #[test]
     fn test_handle_tag_command_list_tags_empty() {
         let mut store = LachesStore::default();
+        let hostname = crate::store::get_hostname();
         let process = Process::new("test_process".to_string());
-        store.process_information.push(process);
+        store.machine_data.insert(hostname, vec![process]);
 
         let result = handle_tag_command(&mut store, "test_process", None, None, true);
         assert!(result.is_ok());
@@ -252,10 +262,11 @@ mod tests {
     #[test]
     fn test_handle_tag_command_list_tags_with_tags() {
         let mut store = LachesStore::default();
+        let hostname = crate::store::get_hostname();
         let mut process = Process::new("test_process".to_string());
         process.tags.push("work".to_string());
         process.tags.push("dev".to_string());
-        store.process_information.push(process);
+        store.machine_data.insert(hostname, vec![process]);
 
         let result = handle_tag_command(&mut store, "test_process", None, None, true);
         assert!(result.is_ok());
@@ -264,8 +275,9 @@ mod tests {
     #[test]
     fn test_handle_tag_command_tags_with_commas_and_spaces() {
         let mut store = LachesStore::default();
+        let hostname = crate::store::get_hostname();
         let process = Process::new("test_process".to_string());
-        store.process_information.push(process);
+        store.machine_data.insert(hostname.clone(), vec![process]);
 
         let result = handle_tag_command(
             &mut store,
@@ -276,7 +288,7 @@ mod tests {
         );
         assert!(result.is_ok());
 
-        let process = &store.process_information[0];
+        let process = &store.machine_data.get(&hostname).unwrap()[0];
         assert_eq!(process.tags.len(), 2);
         assert!(process.tags.contains(&"tag1".to_string()));
         assert!(process.tags.contains(&"tag2".to_string()));

@@ -82,7 +82,7 @@ fn add_to_list(
 
         let regex = regex_result.unwrap();
 
-        let existing_processes = &laches_store.process_information;
+        let existing_processes = laches_store.get_current_machine_processes();
         let matched_processes: Vec<&String> = existing_processes
             .iter()
             .filter(|p| regex.is_match(&p.title))
