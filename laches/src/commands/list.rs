@@ -324,8 +324,7 @@ pub fn list_processes(
         format_uptime(avg_usage_per_process).yellow()
     );
 
-    if !date_filter.is_some() && !today_only {
-        // Calculate total active days across all processes
+    if date_filter.is_none() && !today_only {
         let total_active_days: usize = stats.iter().map(|(s, _)| s.active_days).sum();
         let avg_active_days = if total_processes > 0 {
             total_active_days as f64 / total_processes as f64
