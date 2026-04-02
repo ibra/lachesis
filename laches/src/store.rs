@@ -21,6 +21,9 @@ pub struct Process {
     pub title: String,
     #[tabled(skip)]
     #[serde(default)]
+    pub exe_path: Option<String>,
+    #[tabled(skip)]
+    #[serde(default)]
     pub daily_usage: HashMap<String, u64>,
     #[tabled(skip)]
     #[serde(default)]
@@ -28,6 +31,19 @@ pub struct Process {
     #[tabled(skip)]
     #[serde(default = "get_today_date")]
     pub last_seen: String,
+}
+
+/// Normalize a process name for consistent cross-platform matching.
+/// Strips `.exe` suffix on Windows so that "firefox.exe" becomes "firefox".
+pub fn normalize_process_name(name: &str) -> String {
+    let normalized = if cfg!(windows) {
+        name.strip_suffix(".exe")
+            .or_else(|| name.strip_suffix(".EXE"))
+            .unwrap_or(name)
+    } else {
+        name
+    };
+    normalized.to_string()
 }
 
 fn get_today_date() -> String {
@@ -89,6 +105,18 @@ impl Process {
         let today = Local::now().format("%Y-%m-%d").to_string();
         Self {
             title,
+            exe_path: None,
+            daily_usage: HashMap::new(),
+            tags: Vec::new(),
+            last_seen: today,
+        }
+    }
+
+    pub fn with_exe_path(title: String, exe_path: Option<String>) -> Self {
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        Self {
+            title,
+            exe_path,
             daily_usage: HashMap::new(),
             tags: Vec::new(),
             last_seen: today,

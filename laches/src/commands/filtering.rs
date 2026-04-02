@@ -4,10 +4,17 @@ use regex::Regex;
 use std::error::Error;
 use std::path::Path;
 
-/// Check if a process name matches any pattern in the list (supports both exact matches and regex)
+/// Check if a process name matches any pattern in the list.
+/// Supports both exact matches and regex. On windows, exact matches
+/// are case-insensitive since process names are case-insensitive there.
 pub fn matches_any_pattern(process_name: &str, patterns: &[String]) -> bool {
     for pattern in patterns {
-        if pattern == process_name {
+        // exact match (case-insensitive on windows)
+        if cfg!(windows) {
+            if pattern.eq_ignore_ascii_case(process_name) {
+                return true;
+            }
+        } else if pattern == process_name {
             return true;
         }
 
@@ -364,11 +371,16 @@ mod tests {
     }
 
     #[test]
-    fn test_matches_any_pattern_case_sensitive() {
+    fn test_matches_any_pattern_case_handling() {
         let patterns = vec!["Chrome.exe".to_string()];
 
         assert!(matches_any_pattern("Chrome.exe", &patterns));
-        assert!(!matches_any_pattern("chrome.exe", &patterns));
+        // on windows, exact matching is case-insensitive
+        if cfg!(windows) {
+            assert!(matches_any_pattern("chrome.exe", &patterns));
+        } else {
+            assert!(!matches_any_pattern("chrome.exe", &patterns));
+        }
     }
 
     #[test]
