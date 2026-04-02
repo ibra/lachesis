@@ -1,6 +1,6 @@
 use clap::Parser;
 use laches::{
-    cli::{Cli, Commands, ConfigAction, DataAction},
+    cli::{AutostartToggle, Cli, Commands, ConfigAction, DataAction, FilterMode},
     commands::{
         autostart::handle_autostart,
         config::{set_store_path, show_config},
@@ -61,19 +61,26 @@ fn main() -> Result<(), Box<dyn Error>> {
             remove.as_deref(),
             *list,
         ),
+        Commands::Whitelist { action } => handle_whitelist(&mut laches_store, &store_path, action),
+        Commands::Blacklist { action } => handle_blacklist(&mut laches_store, &store_path, action),
+        Commands::Mode { mode } => {
+            let mode_str = match mode {
+                FilterMode::Whitelist => "whitelist",
+                FilterMode::Blacklist => "blacklist",
+                FilterMode::Default => "default",
+            };
+            set_mode(mode_str, &mut laches_store)
+        }
+        Commands::Autostart { toggle } => {
+            let toggle_str = match toggle {
+                AutostartToggle::On => "yes",
+                AutostartToggle::Off => "no",
+            };
+            handle_autostart(&mut laches_store, toggle_str, &store_path)
+        }
         Commands::Config { action } => match action {
-            ConfigAction::Show => show_config(&laches_store, &store_path),
-            ConfigAction::SetStorePath { path } => set_store_path(&store_path, path),
-            ConfigAction::Autostart { toggle } => {
-                handle_autostart(&mut laches_store, toggle, &store_path)
-            }
-            ConfigAction::Mode { mode } => set_mode(mode, &mut laches_store),
-            ConfigAction::Whitelist { action } => {
-                handle_whitelist(&mut laches_store, &store_path, action)
-            }
-            ConfigAction::Blacklist { action } => {
-                handle_blacklist(&mut laches_store, &store_path, action)
-            }
+            Some(ConfigAction::StorePath { path }) => set_store_path(&store_path, path),
+            None => show_config(&laches_store, &store_path),
         },
         Commands::Data { action } => match action {
             DataAction::Export {

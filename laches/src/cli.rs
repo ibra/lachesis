@@ -1,7 +1,11 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
-#[command(author, version)]
+#[command(
+    author,
+    version,
+    about = "a cli-based automatic time tracking tool for monitoring screentime"
+)]
 #[command(propagate_version = true)]
 pub struct Cli {
     #[command(subcommand)]
@@ -10,31 +14,80 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// start the background monitoring daemon
     Start,
+
+    /// stop the background monitoring daemon
     Stop,
+
+    /// list tracked process usage
     List {
+        /// filter by tag name
         #[arg(short, long)]
         tag: Option<String>,
-        #[arg(short = 'd', long)]
-        today: bool,
+
+        /// show only today's usage
         #[arg(long)]
+        today: bool,
+
+        /// show usage for a specific date (YYYY-MM-DD)
+        #[arg(short, long)]
         date: Option<String>,
+
+        /// include data from all synced machines
         #[arg(short = 'a', long)]
         all_machines: bool,
     },
+
+    /// add, remove, or list tags on a tracked process
     Tag {
+        /// name of the process to tag
         process: String,
+
+        /// tag(s) to add (comma-separated)
         #[arg(short, long)]
         add: Option<String>,
+
+        /// tag(s) to remove (comma-separated)
         #[arg(short, long)]
         remove: Option<String>,
+
+        /// list current tags for this process
         #[arg(short, long)]
         list: bool,
     },
+
+    /// manage whitelist patterns (only track matched processes)
+    Whitelist {
+        #[command(subcommand)]
+        action: FilterListAction,
+    },
+
+    /// manage blacklist patterns (track everything except matched)
+    Blacklist {
+        #[command(subcommand)]
+        action: FilterListAction,
+    },
+
+    /// set the filtering mode
+    Mode {
+        /// filtering mode to use
+        mode: FilterMode,
+    },
+
+    /// enable or disable autostart on login
+    Autostart {
+        /// whether to start on login
+        toggle: AutostartToggle,
+    },
+
+    /// show or modify configuration
     Config {
         #[command(subcommand)]
-        action: ConfigAction,
+        action: Option<ConfigAction>,
     },
+
+    /// export, delete, or reset tracked data
     Data {
         #[command(subcommand)]
         action: DataAction,
@@ -43,54 +96,78 @@ pub enum Commands {
 
 #[derive(Subcommand)]
 pub enum ConfigAction {
-    Show,
-    SetStorePath {
+    /// set a custom data storage path
+    StorePath {
+        /// target directory path
         path: String,
-    },
-    Autostart {
-        toggle: String, // yes or no
-    },
-    Mode {
-        mode: String,
-    },
-    Whitelist {
-        #[command(subcommand)]
-        action: FilterListAction,
-    },
-    Blacklist {
-        #[command(subcommand)]
-        action: FilterListAction,
     },
 }
 
 #[derive(Subcommand)]
 pub enum DataAction {
+    /// export tracked data to a json file
     Export {
+        /// output file path
         output: String,
+
+        /// only export data from the last N days (e.g. 7d, 30d)
         #[arg(long)]
         duration: Option<String>,
+
+        /// include data from all synced machines
         #[arg(short = 'a', long)]
         all_machines: bool,
     },
+
+    /// delete tracked data by duration or all
     Delete {
+        /// delete all recorded data
         #[arg(long)]
         all: bool,
+
+        /// delete data older than N days (e.g. 7d, 30d)
         #[arg(long)]
         duration: Option<String>,
     },
+
+    /// reset all stored data and configuration
     Reset,
 }
 
 #[derive(Subcommand)]
 pub enum FilterListAction {
+    /// add a process pattern
     Add {
+        /// process name or pattern to add
         process: String,
+
+        /// treat the pattern as a regular expression
         #[arg(short, long)]
         regex: bool,
     },
+
+    /// remove a process pattern
     Remove {
+        /// process name or pattern to remove
         process: String,
     },
+
+    /// list all patterns
     List,
+
+    /// clear all patterns
     Clear,
+}
+
+#[derive(Clone, ValueEnum)]
+pub enum FilterMode {
+    Whitelist,
+    Blacklist,
+    Default,
+}
+
+#[derive(Clone, ValueEnum)]
+pub enum AutostartToggle {
+    On,
+    Off,
 }
