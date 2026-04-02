@@ -159,10 +159,15 @@ impl LachesStore {
 
 pub fn save_store(store: &LachesStore, store_path: &Path) -> Result<(), Box<dyn Error>> {
     let file_path = store_path.join(STORE_NAME);
-    let mut file = File::create(file_path)?;
+    let tmp_path = store_path.join(".store.json.tmp");
 
-    let laches_store = serde_json::to_string(store)?;
-    file.write_all(laches_store.as_bytes())?;
+    let serialized = serde_json::to_string_pretty(store)?;
+
+    let mut tmp_file = File::create(&tmp_path)?;
+    tmp_file.write_all(serialized.as_bytes())?;
+    tmp_file.flush()?;
+
+    fs::rename(&tmp_path, &file_path)?;
 
     Ok(())
 }
