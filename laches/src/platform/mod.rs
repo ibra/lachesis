@@ -1,5 +1,18 @@
 use std::time::Duration;
 
+/// Normalize a process name for consistent cross-platform matching.
+/// Strips `.exe` suffix on Windows so that "firefox.exe" becomes "firefox".
+pub fn normalize_process_name(name: &str) -> String {
+    let normalized = if cfg!(windows) {
+        name.strip_suffix(".exe")
+            .or_else(|| name.strip_suffix(".EXE"))
+            .unwrap_or(name)
+    } else {
+        name
+    };
+    normalized.to_string()
+}
+
 /// Information about the currently focused window.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FocusInfo {
