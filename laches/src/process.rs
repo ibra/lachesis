@@ -1,13 +1,11 @@
-use crate::store::{normalize_process_name, LachesStore, Process, STORE_NAME};
+use crate::config::{clear_daemon_pid, read_daemon_pid, write_daemon_pid};
+use crate::store::{normalize_process_name, Process};
 use std::env;
 use std::process::Stdio;
 use std::{error::Error, path::Path, process::Command};
 use sysinfo::{Pid, System};
 
 fn is_daemon_running(pid: u32) -> bool {
-    if pid == u32::MAX {
-        return false;
-    }
     let s = System::new_all();
     if let Some(process) = s.process(Pid::from(pid as usize)) {
         let name = process.name().to_string();
@@ -17,16 +15,16 @@ fn is_daemon_running(pid: u32) -> bool {
     }
 }
 
-pub fn start_monitoring(
-    laches_store: &mut LachesStore,
-    store_path: &Path,
-) -> Result<(), Box<dyn Error>> {
-    if is_daemon_running(laches_store.daemon_pid) {
-        return Err(format!(
-            "error: laches_mon is already running (pid: {}). stop it first with `laches stop`",
-            laches_store.daemon_pid
-        )
-        .into());
+pub fn start_monitoring(config_dir: &Path) -> Result<(), Box<dyn Error>> {
+    // check if already running
+    if let Some(pid) = read_daemon_pid(config_dir) {
+        if is_daemon_running(pid) {
+            return Err(format!(
+                "error: laches_mon is already running (pid: {}). stop it first with `laches stop`",
+                pid
+            )
+            .into());
+        }
     }
 
     let mut exe_path = env::current_exe()?;
@@ -34,8 +32,7 @@ pub fn start_monitoring(
     exe_path.push("laches_mon");
 
     let instance = Command::new(&exe_path)
-        .arg(laches_store.update_interval.to_string())
-        .arg(store_path.join(STORE_NAME))
+        .arg(config_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -49,9 +46,7 @@ pub fn start_monitoring(
         })?;
 
     let pid = instance.id();
-    laches_store.daemon_pid = pid;
-    // child handle is dropped here - on both windows and unix this does NOT
-    // kill the child process, it just releases our handle to it
+    write_daemon_pid(config_dir, pid)?;
     drop(instance);
 
     println!("info: started laches_mon daemon (pid: {})", pid);
@@ -59,22 +54,22 @@ pub fn start_monitoring(
     Ok(())
 }
 
-pub fn stop_monitoring(laches_store: &mut LachesStore) -> Result<(), Box<dyn Error>> {
-    if !is_daemon_running(laches_store.daemon_pid) {
-        println!("info: laches_mon is not running");
-        laches_store.daemon_pid = u32::MAX;
-        return Ok(());
-    }
+pub fn stop_monitoring(config_dir: &Path) -> Result<(), Box<dyn Error>> {
+    let pid = match read_daemon_pid(config_dir) {
+        Some(pid) if is_daemon_running(pid) => pid,
+        _ => {
+            println!("info: laches_mon is not running");
+            clear_daemon_pid(config_dir);
+            return Ok(());
+        }
+    };
 
     let s = System::new_all();
-    if let Some(process) = s.process(Pid::from(laches_store.daemon_pid as usize)) {
+    if let Some(process) = s.process(Pid::from(pid as usize)) {
         process.kill();
     }
-    println!(
-        "info: stopped laches_mon (pid: {})",
-        laches_store.daemon_pid
-    );
-    laches_store.daemon_pid = u32::MAX;
+    clear_daemon_pid(config_dir);
+    println!("info: stopped laches_mon (pid: {})", pid);
 
     Ok(())
 }
