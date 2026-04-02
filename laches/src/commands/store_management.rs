@@ -18,6 +18,7 @@ pub fn confirm_reset_store(store_path: &Path) -> Result<(), Box<dyn Error>> {
 
 pub fn confirm_delete_store(
     laches_store: &mut LachesStore,
+    store_path: &Path,
     delete_all: bool,
     duration: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
@@ -31,7 +32,7 @@ pub fn confirm_delete_store(
 
     if delete_all {
         if confirm("are you sure you want to delete all recorded time? [y/N]") {
-            let current_machine_processes = laches_store.get_current_machine_processes_mut();
+            let current_machine_processes = laches_store.get_machine_processes_mut(store_path);
             let total_processes = current_machine_processes.len();
             for process in current_machine_processes.iter_mut() {
                 process.daily_usage.clear();
@@ -53,7 +54,7 @@ pub fn confirm_delete_store(
             days, cutoff_str
         )) {
             let mut total_deleted = 0;
-            let current_machine_processes = laches_store.get_current_machine_processes_mut();
+            let current_machine_processes = laches_store.get_machine_processes_mut(store_path);
             for process in current_machine_processes.iter_mut() {
                 let dates_to_remove: Vec<String> = process
                     .daily_usage
@@ -82,6 +83,7 @@ pub fn confirm_delete_store(
 
 pub fn export_store(
     laches_store: &LachesStore,
+    store_path: &Path,
     output_path: &str,
     duration: Option<&str>,
     all_machines: bool,
@@ -99,7 +101,7 @@ pub fn export_store(
     let processes_to_export = if all_machines {
         laches_store.get_all_processes()
     } else {
-        laches_store.get_current_machine_processes()
+        laches_store.get_machine_processes(store_path)
     };
 
     for process in &processes_to_export {
@@ -219,23 +221,29 @@ mod tests {
     #[test]
     fn test_export_store_all_data() {
         let temp_dir = TempDir::new().unwrap();
-        let output_path = temp_dir.path().join("export.json");
+        let store_path = temp_dir.path();
+        let output_path = store_path.join("export.json");
+        let machine_id = crate::store::get_machine_id(store_path);
 
         let mut store = LachesStore::default();
         let mut process1 = Process::new("process1".to_string());
         process1.add_time(3600);
         let mut process2 = Process::new("process2".to_string());
         process2.add_time(7200);
-        let hostname = crate::store::get_hostname();
         store
             .machine_data
-            .insert(hostname, vec![process1, process2]);
+            .insert(machine_id, vec![process1, process2]);
 
-        let result = export_store(&store, output_path.to_str().unwrap(), None, false);
+        let result = export_store(
+            &store,
+            store_path,
+            output_path.to_str().unwrap(),
+            None,
+            false,
+        );
         assert!(result.is_ok());
         assert!(output_path.exists());
 
-        // Verify exported data
         let exported_data = std::fs::read_to_string(&output_path).unwrap();
         let exported_processes: Vec<Process> = serde_json::from_str(&exported_data).unwrap();
         assert_eq!(exported_processes.len(), 2);
@@ -244,33 +252,36 @@ mod tests {
     #[test]
     fn test_export_store_with_duration_filter() {
         let temp_dir = TempDir::new().unwrap();
-        let output_path = temp_dir.path().join("export_filtered.json");
+        let store_path = temp_dir.path();
+        let output_path = store_path.join("export_filtered.json");
+        let machine_id = crate::store::get_machine_id(store_path);
 
         let mut store = LachesStore::default();
         let mut process = Process::new("test_process".to_string());
 
-        // Add data for today
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
         process.daily_usage.insert(today.clone(), 1000);
 
-        // Add data for 10 days ago
         let old_date = (chrono::Local::now() - chrono::Duration::days(10))
             .format("%Y-%m-%d")
             .to_string();
         process.daily_usage.insert(old_date.clone(), 5000);
 
-        let hostname = crate::store::get_hostname();
-        store.machine_data.insert(hostname, vec![process]);
+        store.machine_data.insert(machine_id, vec![process]);
 
-        // Export only last 5 days
-        let result = export_store(&store, output_path.to_str().unwrap(), Some("5d"), false);
+        let result = export_store(
+            &store,
+            store_path,
+            output_path.to_str().unwrap(),
+            Some("5d"),
+            false,
+        );
         assert!(result.is_ok());
 
         let exported_data = std::fs::read_to_string(&output_path).unwrap();
         let exported_processes: Vec<Process> = serde_json::from_str(&exported_data).unwrap();
 
         assert_eq!(exported_processes.len(), 1);
-        // Should only have today's data
         assert_eq!(exported_processes[0].daily_usage.len(), 1);
         assert!(exported_processes[0].daily_usage.contains_key(&today));
         assert!(!exported_processes[0].daily_usage.contains_key(&old_date));
@@ -279,25 +290,31 @@ mod tests {
     #[test]
     fn test_export_store_excludes_zero_uptime() {
         let temp_dir = TempDir::new().unwrap();
-        let output_path = temp_dir.path().join("export_no_zero.json");
+        let store_path = temp_dir.path();
+        let output_path = store_path.join("export_no_zero.json");
+        let machine_id = crate::store::get_machine_id(store_path);
 
         let mut store = LachesStore::default();
         let mut process_with_time = Process::new("active".to_string());
         process_with_time.add_time(1000);
         let process_without_time = Process::new("inactive".to_string());
 
-        let hostname = crate::store::get_hostname();
         store
             .machine_data
-            .insert(hostname, vec![process_with_time, process_without_time]);
+            .insert(machine_id, vec![process_with_time, process_without_time]);
 
-        let result = export_store(&store, output_path.to_str().unwrap(), None, false);
+        let result = export_store(
+            &store,
+            store_path,
+            output_path.to_str().unwrap(),
+            None,
+            false,
+        );
         assert!(result.is_ok());
 
         let exported_data = std::fs::read_to_string(&output_path).unwrap();
         let exported_processes: Vec<Process> = serde_json::from_str(&exported_data).unwrap();
 
-        // Only process with uptime > 0 should be exported
         assert_eq!(exported_processes.len(), 1);
         assert_eq!(exported_processes[0].title, "active");
     }
@@ -305,7 +322,9 @@ mod tests {
     #[test]
     fn test_export_store_sorting() {
         let temp_dir = TempDir::new().unwrap();
-        let output_path = temp_dir.path().join("export_sorted.json");
+        let store_path = temp_dir.path();
+        let output_path = store_path.join("export_sorted.json");
+        let machine_id = crate::store::get_machine_id(store_path);
 
         let mut store = LachesStore::default();
         let mut process1 = Process::new("low_usage".to_string());
@@ -315,18 +334,22 @@ mod tests {
         let mut process3 = Process::new("medium_usage".to_string());
         process3.add_time(500);
 
-        let hostname = crate::store::get_hostname();
         store
             .machine_data
-            .insert(hostname, vec![process1, process2, process3]);
+            .insert(machine_id, vec![process1, process2, process3]);
 
-        let result = export_store(&store, output_path.to_str().unwrap(), None, false);
+        let result = export_store(
+            &store,
+            store_path,
+            output_path.to_str().unwrap(),
+            None,
+            false,
+        );
         assert!(result.is_ok());
 
         let exported_data = std::fs::read_to_string(&output_path).unwrap();
         let exported_processes: Vec<Process> = serde_json::from_str(&exported_data).unwrap();
 
-        // Should be sorted by total usage (descending)
         assert_eq!(exported_processes[0].title, "high_usage");
         assert_eq!(exported_processes[1].title, "medium_usage");
         assert_eq!(exported_processes[2].title, "low_usage");
@@ -334,20 +357,21 @@ mod tests {
 
     #[test]
     fn test_confirm_delete_store_all_clears_data() {
+        let temp_dir = TempDir::new().unwrap();
+        let store_path = temp_dir.path();
+
         let mut store = LachesStore::default();
         let mut process1 = Process::new("process1".to_string());
         process1.add_time(1000);
         let mut process2 = Process::new("process2".to_string());
         process2.add_time(2000);
 
-        let hostname = crate::store::get_hostname();
+        let machine_id = crate::store::get_machine_id(store_path);
         store
             .machine_data
-            .insert(hostname, vec![process1, process2]);
+            .insert(machine_id, vec![process1, process2]);
 
-        // This test would require mocking user input, so we'll just verify
-        // the function signature and error handling
-        let result = confirm_delete_store(&mut store, false, None);
+        let result = confirm_delete_store(&mut store, store_path, false, None);
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -357,9 +381,12 @@ mod tests {
 
     #[test]
     fn test_confirm_delete_store_invalid_both_flags() {
+        let temp_dir = TempDir::new().unwrap();
+        let store_path = temp_dir.path();
+
         let mut store = LachesStore::default();
 
-        let result = confirm_delete_store(&mut store, true, Some("7d"));
+        let result = confirm_delete_store(&mut store, store_path, true, Some("7d"));
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -370,11 +397,18 @@ mod tests {
     #[test]
     fn test_export_store_empty_store() {
         let temp_dir = TempDir::new().unwrap();
-        let output_path = temp_dir.path().join("export_empty.json");
+        let store_path = temp_dir.path();
+        let output_path = store_path.join("export_empty.json");
 
         let store = LachesStore::default();
 
-        let result = export_store(&store, output_path.to_str().unwrap(), None, false);
+        let result = export_store(
+            &store,
+            store_path,
+            output_path.to_str().unwrap(),
+            None,
+            false,
+        );
         assert!(result.is_ok());
 
         let exported_data = std::fs::read_to_string(&output_path).unwrap();

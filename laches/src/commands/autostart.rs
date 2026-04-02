@@ -1,11 +1,14 @@
 use auto_launch::AutoLaunch;
 use std::{error::Error, path::Path};
 
-use crate::store::{load_or_create_store, STORE_NAME};
+use crate::store::{LachesStore, STORE_NAME};
 
-pub fn handle_autostart(toggle: &str, store_path: &Path) -> Result<(), Box<dyn Error>> {
+pub fn handle_autostart(
+    laches_store: &mut LachesStore,
+    toggle: &str,
+    store_path: &Path,
+) -> Result<(), Box<dyn Error>> {
     let store_file = store_path.join(STORE_NAME);
-    let laches_store = load_or_create_store(store_path)?;
 
     let laches_mon_path = if cfg!(windows) {
         std::env::current_exe()?
@@ -44,6 +47,7 @@ pub fn handle_autostart(toggle: &str, store_path: &Path) -> Result<(), Box<dyn E
                 println!("info: autostart is already enabled.");
             } else {
                 auto.enable()?;
+                laches_store.autostart = true;
                 println!("info: enabled laches_mon to run at startup.");
             }
         }
@@ -52,11 +56,12 @@ pub fn handle_autostart(toggle: &str, store_path: &Path) -> Result<(), Box<dyn E
                 println!("info: autostart is already disabled.");
             } else {
                 auto.disable()?;
+                laches_store.autostart = false;
                 println!("info: disabled laches_mon from running at startup.");
             }
         }
         _ => {
-            return Err("error: invalid option for autostart. Use 'yes' or 'no'.".into());
+            return Err("error: invalid option for autostart. use 'yes' or 'no'.".into());
         }
     }
 

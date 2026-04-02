@@ -147,23 +147,6 @@ impl LachesStore {
         self.machine_data.entry(machine_id).or_default()
     }
 
-    /// Get processes for the current machine (uses default path from store location)
-    /// For backwards compatibility with existing code
-    pub fn get_current_machine_processes(&self) -> Vec<Process> {
-        let hostname = get_hostname();
-        self.machine_data
-            .get(&hostname)
-            .cloned()
-            .unwrap_or_default()
-    }
-
-    /// Get mutable reference to processes for the current machine
-    /// For backwards compatibility - prefer get_machine_processes_mut
-    pub fn get_current_machine_processes_mut(&mut self) -> &mut Vec<Process> {
-        let hostname = get_hostname();
-        self.machine_data.entry(hostname).or_default()
-    }
-
     /// Get all processes from all machines (useful for viewing data from all synced machines)
     pub fn get_all_processes(&self) -> Vec<Process> {
         let mut all_processes = Vec::new();
@@ -172,10 +155,6 @@ impl LachesStore {
         }
         all_processes
     }
-}
-
-pub fn get_stored_processes(laches_config: &LachesStore) -> Vec<Process> {
-    laches_config.get_current_machine_processes()
 }
 
 pub fn save_store(store: &LachesStore, store_path: &Path) -> Result<(), Box<dyn Error>> {
@@ -291,18 +270,20 @@ mod tests {
     }
 
     #[test]
-    fn test_get_stored_processes() {
-        let mut store = LachesStore::default();
-        let hostname = get_hostname();
+    fn test_get_machine_processes() {
+        let temp_dir = TempDir::new().unwrap();
+        let store_path = temp_dir.path();
+        let machine_id = get_machine_id(store_path);
 
+        let mut store = LachesStore::default();
         let process1 = Process::new("process1".to_string());
         let process2 = Process::new("process2".to_string());
 
         store
             .machine_data
-            .insert(hostname, vec![process1, process2]);
+            .insert(machine_id, vec![process1, process2]);
 
-        let stored = get_stored_processes(&store);
+        let stored = store.get_machine_processes(store_path);
         assert_eq!(stored.len(), 2);
         assert_eq!(stored[0].title, "process1");
         assert_eq!(stored[1].title, "process2");
@@ -418,9 +399,12 @@ mod tests {
     }
 
     #[test]
-    fn test_get_current_machine_processes() {
+    fn test_get_machine_processes_isolation() {
+        let temp_dir = TempDir::new().unwrap();
+        let store_path = temp_dir.path();
+        let machine_id = get_machine_id(store_path);
+
         let mut store = LachesStore::default();
-        let hostname = get_hostname();
 
         let current_machine_processes = vec![
             Process::new("local_process1".to_string()),
@@ -431,25 +415,28 @@ mod tests {
 
         store
             .machine_data
-            .insert(hostname.clone(), current_machine_processes);
+            .insert(machine_id, current_machine_processes);
         store
             .machine_data
             .insert("other_machine".to_string(), other_machine_processes);
 
-        let current = store.get_current_machine_processes();
+        let current = store.get_machine_processes(store_path);
         assert_eq!(current.len(), 2);
         assert_eq!(current[0].title, "local_process1");
         assert_eq!(current[1].title, "local_process2");
     }
 
     #[test]
-    fn test_get_current_machine_processes_mut() {
+    fn test_get_machine_processes_mut_creates_entry() {
+        let temp_dir = TempDir::new().unwrap();
+        let store_path = temp_dir.path();
+
         let mut store = LachesStore::default();
 
-        let processes = store.get_current_machine_processes_mut();
+        let processes = store.get_machine_processes_mut(store_path);
         processes.push(Process::new("test_process".to_string()));
 
-        let current = store.get_current_machine_processes();
+        let current = store.get_machine_processes(store_path);
         assert_eq!(current.len(), 1);
         assert_eq!(current[0].title, "test_process");
     }

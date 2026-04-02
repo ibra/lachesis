@@ -1,48 +1,76 @@
-use crate::{
-    store::{LachesStore, Process, STORE_NAME},
-    utils::confirm,
-};
+use crate::store::{LachesStore, Process, STORE_NAME};
 use std::env;
 use std::mem;
 use std::{error::Error, path::Path, process::Command};
 use sysinfo::{Pid, System};
 
+fn is_daemon_running(pid: u32) -> bool {
+    if pid == u32::MAX {
+        return false;
+    }
+    let s = System::new_all();
+    if let Some(process) = s.process(Pid::from(pid as usize)) {
+        let name = process.name().to_string();
+        name.contains("laches_mon")
+    } else {
+        false
+    }
+}
+
 pub fn start_monitoring(
     laches_store: &mut LachesStore,
     store_path: &Path,
 ) -> Result<(), Box<dyn Error>> {
-    let active_windows = get_active_processes();
-    println!("info: started monitoring {} windows", &active_windows.len());
+    if is_daemon_running(laches_store.daemon_pid) {
+        return Err(format!(
+            "error: laches_mon is already running (pid: {}). stop it first with `laches stop`",
+            laches_store.daemon_pid
+        )
+        .into());
+    }
 
-    let mut exe_path = env::current_exe().unwrap();
+    let mut exe_path = env::current_exe()?;
     exe_path.pop();
     exe_path.push("laches_mon");
 
-    let mut monitor = Command::new(exe_path);
+    let mut monitor = Command::new(&exe_path);
     monitor
         .arg(laches_store.update_interval.to_string())
         .arg(store_path.join(STORE_NAME));
 
-    let instance = monitor
-        .spawn()
-        .expect("error: failed to execute laches_mon (monitoring daemon)");
+    let instance = monitor.spawn().map_err(|e| {
+        format!(
+            "error: failed to start laches_mon at '{}': {}",
+            exe_path.display(),
+            e
+        )
+    })?;
 
-    laches_store.daemon_pid = instance.id();
+    let pid = instance.id();
+    laches_store.daemon_pid = pid;
     mem::forget(instance);
+
+    println!("info: started laches_mon daemon (pid: {})", pid);
 
     Ok(())
 }
 
 pub fn stop_monitoring(laches_store: &mut LachesStore) -> Result<(), Box<dyn Error>> {
-    if confirm("are you sure you want to stop window tracking (kill laches_mon)? [y/N]") {
-        let s = System::new_all();
-        if let Some(process) = s.process(Pid::from(laches_store.daemon_pid as usize)) {
-            process.kill();
-        }
-        println!("info: killed laches_mon (monitoring daemon)");
-    } else {
-        println!("info: aborted stop operation");
+    if !is_daemon_running(laches_store.daemon_pid) {
+        println!("info: laches_mon is not running");
+        laches_store.daemon_pid = u32::MAX;
+        return Ok(());
     }
+
+    let s = System::new_all();
+    if let Some(process) = s.process(Pid::from(laches_store.daemon_pid as usize)) {
+        process.kill();
+    }
+    println!(
+        "info: stopped laches_mon (pid: {})",
+        laches_store.daemon_pid
+    );
+    laches_store.daemon_pid = u32::MAX;
 
     Ok(())
 }
