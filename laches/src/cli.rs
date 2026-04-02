@@ -59,6 +59,9 @@ pub enum Commands {
         all_machines: bool,
     },
 
+    /// quick daily overview with comparisons
+    Summary,
+
     /// add, remove, or list tags on a tracked process
     Tag {
         /// name of the process to tag
