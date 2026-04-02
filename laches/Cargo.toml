@@ -7,17 +7,28 @@ license = "MIT"
 
 [dependencies]
 auto-launch.workspace = true
+chrono.workspace = true
 clap.workspace = true
 regex.workspace = true
+rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 uuid.workspace = true
 
-chrono = { version = "0.4", features = ["serde"] }
 colored = "2.1"
 dirs = "5.0.1"
 sysinfo = "0.30.13"
 tabled = "0.16.0"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Threading",
+    "Win32_System_SystemInformation",
+    "Win32_UI_Input_KeyboardAndMouse",
+] }
 
 [dev-dependencies]
 tempfile = "3.8"

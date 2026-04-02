@@ -1,108 +1,79 @@
-## lachesis (la·kuh·suhs)
+## lachesis
 
-lachesis is a cli-based, customizable, automatic time tracking tool for monitoring screentime. it tracks your process usage in the background and provides commands for managing, filtering, and exporting time spent on applications.
+a cli-based time tracker that monitors your active screentime. it tracks which window you're focused on, records sessions with timestamps, and stores everything in sqlite.
+
+unlike tools that track all running processes equally, lachesis only tracks the **focused window** - so background spotify doesn't count as screentime.
 
 ## features
 
-- **automatic time tracking**: background daemon (`laches_mon`) polls active processes at a configurable interval.
-- **tags**: tag processes and group tracked time together.
-- **filtering**: whitelist or blacklist specific processes with optional regex matching.
-- **data export**: export tracked data to json, optionally filtered by duration or machine.
-- **cross-platform**: windows, linux, and macos. process names are normalized across platforms. data can be aggregated across machines if the store file is synced.
-- **atomic persistence**: store writes use temp-file-then-rename to prevent data corruption on crash.
-- **(planned) idle tracking**: automatic detection of idle vs active time.
+- **focused window tracking**: only tracks what you're actually looking at, not every background process
+- **session-based data**: records timestamped sessions (start/end time, process, window title) instead of flat second counters
+- **idle detection**: pauses tracking when you step away (configurable timeout)
+- **sqlite storage**: fast queries, handles concurrent access, scales to years of data
+- **per-machine sync**: each machine writes its own database file - sync the `data/` folder with syncthing or dropbox, no conflicts
+- **tags**: tag processes and filter by tag
+- **filtering**: whitelist or blacklist processes with regex support
+- **cross-platform**: windows (full support), linux and macos (stubs, contributions welcome)
+
+## architecture
+
+```
+~/.config/lachesis/
+  config.toml              # settings (check interval, idle timeout, filters)
+  .machine_id              # stable machine identifier
+  .daemon_pid              # pid of the running daemon
+  data/
+    HOSTNAME_uuid.db       # sqlite database (one per machine)
+```
+
+the daemon (`laches_mon`) checks the focused window every 2 seconds. when focus changes, it ends the previous session and starts a new one. all writes go to sqlite - no full-file rewrites, no JSON serialization on every tick.
 
 ## usage
 
-### monitoring
-
 ```
-laches start             # start the background daemon
-laches stop              # stop it
-```
+laches start                       # start the daemon
+laches stop                        # stop the daemon
 
-### listing tracked data
-
-```
-laches list                        # show all tracked processes
-laches list --tag work             # filter by tag
+laches list                        # show tracked process usage
 laches list --today                # today only
 laches list --date 2025-01-15      # specific date
-laches list --all-machines         # include all synced machines
-```
+laches list --tag work             # filter by tag
 
-### tagging
-
-```
 laches tag firefox --add browser
 laches tag firefox --remove browser
 laches tag firefox --list
-```
 
-multiple tags at once (comma-separated):
+laches mode whitelist              # set filter mode
+laches mode blacklist
+laches mode default
 
-```
-laches tag firefox --add "browser,personal"
-```
-
-### filtering
-
-set the mode first, then manage patterns:
-
-```
-laches mode whitelist              # only track whitelisted processes
-laches mode blacklist              # track everything except blacklisted
-laches mode default                # track everything (default)
-```
-
-manage patterns:
-
-```
 laches whitelist add firefox
 laches whitelist add "^chrome.*" --regex
-laches whitelist remove firefox
 laches whitelist list
 laches whitelist clear
 
 laches blacklist add discord
-laches blacklist remove discord
 laches blacklist list
-laches blacklist clear
-```
 
-### autostart
-
-```
-laches autostart on
+laches autostart on                # run daemon on login
 laches autostart off
-```
 
-### configuration
+laches config                      # show configuration
 
-```
-laches config                      # show current config
-laches config store-path /path     # set custom store location
-```
-
-### data management
-
-```
-laches data export out.json
+laches data export out.json        # export sessions to json
 laches data export out.json --duration 7d
-laches data export out.json --all-machines
-
 laches data delete --duration 7d
 laches data delete --all
-laches data reset
+laches data reset                  # clear all data
 ```
 
 ## development
 
-contributions are welcome. check the [issue tracker](https://github.com/ibra/lachesis/issues) for open tasks, or open a new issue to report bugs or request features.
-
 ```
-cargo build              # build both laches and laches_mon
+cargo build              # build laches + laches_mon
 cargo test               # run all tests
 cargo clippy             # lint
 cargo fmt                # format
 ```
+
+see the [issue tracker](https://github.com/ibra/lachesis/issues) for open work.

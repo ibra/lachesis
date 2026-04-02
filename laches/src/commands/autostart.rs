@@ -1,24 +1,16 @@
 use auto_launch::AutoLaunch;
 use std::{error::Error, path::Path};
 
-use crate::store::{LachesStore, STORE_NAME};
-
-pub fn handle_autostart(
-    laches_store: &mut LachesStore,
-    toggle: &str,
-    store_path: &Path,
-) -> Result<(), Box<dyn Error>> {
-    let store_file = store_path.join(STORE_NAME);
-
+pub fn handle_autostart(toggle: &str, config_dir: &Path) -> Result<(), Box<dyn Error>> {
     let laches_mon_path = if cfg!(windows) {
         std::env::current_exe()?
             .parent()
-            .ok_or("Failed to get parent directory")?
+            .ok_or("failed to get parent directory")?
             .join("laches_mon.exe")
     } else {
         std::env::current_exe()?
             .parent()
-            .ok_or("Failed to get parent directory")?
+            .ok_or("failed to get parent directory")?
             .join("laches_mon")
     };
 
@@ -30,14 +22,21 @@ pub fn handle_autostart(
         .into());
     }
 
-    let args = vec![
-        laches_store.update_interval.to_string(),
-        store_file.to_string_lossy().to_string(),
-    ];
+    // the daemon now takes the config directory as its only argument
+    let args = vec![config_dir.to_string_lossy().to_string()];
 
+    #[cfg(target_os = "macos")]
     let auto = AutoLaunch::new(
         "laches_mon",
-        laches_mon_path.to_str().ok_or("Invalid path")?,
+        laches_mon_path.to_str().ok_or("invalid path")?,
+        &args,
+        false,
+    );
+
+    #[cfg(not(target_os = "macos"))]
+    let auto = AutoLaunch::new(
+        "laches_mon",
+        laches_mon_path.to_str().ok_or("invalid path")?,
         &args,
     );
 
@@ -47,7 +46,6 @@ pub fn handle_autostart(
                 println!("info: autostart is already enabled.");
             } else {
                 auto.enable()?;
-                laches_store.autostart = true;
                 println!("info: enabled laches_mon to run at startup.");
             }
         }
@@ -56,7 +54,6 @@ pub fn handle_autostart(
                 println!("info: autostart is already disabled.");
             } else {
                 auto.disable()?;
-                laches_store.autostart = false;
                 println!("info: disabled laches_mon from running at startup.");
             }
         }

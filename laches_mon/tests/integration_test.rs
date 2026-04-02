@@ -1,230 +1,99 @@
 use laches::{
-    process::get_active_processes,
-    store::{get_machine_id, LachesStore, Process, STORE_NAME},
+    config::{get_machine_id, load_or_create_config, machine_db_path},
+    db::Database,
+    platform::create_tracker,
 };
-use std::fs::File;
-use std::io::Write;
-use std::thread;
-use std::time::Duration;
 use tempfile::TempDir;
 
 #[test]
-fn test_store_exists_and_valid() {
+fn test_config_loads_in_temp_dir() {
     let temp_dir = TempDir::new().unwrap();
-    let store_path = temp_dir.path();
-
-    let mut store = LachesStore::default();
-    store.update_interval = 5;
-
-    let file_path = store_path.join(STORE_NAME);
-    let mut file = File::create(&file_path).unwrap();
-    let serialized = serde_json::to_string(&store).unwrap();
-    file.write_all(serialized.as_bytes()).unwrap();
-
-    assert!(file_path.exists());
-
-    let file = File::open(&file_path).unwrap();
-    let loaded_store: LachesStore = serde_json::from_reader(file).unwrap();
-    assert_eq!(loaded_store.update_interval, 5);
+    let config = load_or_create_config(temp_dir.path()).unwrap();
+    assert_eq!(config.daemon.check_interval, 2);
+    assert_eq!(config.daemon.idle_timeout, 300);
 }
 
 #[test]
-fn test_add_process_to_store() {
+fn test_database_opens_in_data_dir() {
     let temp_dir = TempDir::new().unwrap();
-    let store_path = temp_dir.path();
+    let machine_id = get_machine_id(temp_dir.path());
+    let data_dir = laches::config::data_dir(temp_dir.path());
+    std::fs::create_dir_all(&data_dir).unwrap();
 
-    let mut store = LachesStore::default();
-    store.update_interval = 5;
+    let db_path = machine_db_path(temp_dir.path(), &machine_id);
+    let db = Database::open(&db_path).unwrap();
 
-    let file_path = store_path.join(STORE_NAME);
-    let mut file = File::create(&file_path).unwrap();
-    let serialized = serde_json::to_string(&store).unwrap();
-    file.write_all(serialized.as_bytes()).unwrap();
+    let sid = db
+        .start_session(
+            "test_process",
+            Some("/usr/bin/test"),
+            Some("Test Window"),
+            false,
+        )
+        .unwrap();
+    assert!(sid > 0);
 
-    let file = File::open(&file_path).unwrap();
-    let mut loaded_store: LachesStore = serde_json::from_reader(file).unwrap();
-
-    let mut new_process = Process::new("test_process".to_string());
-    new_process.add_time(5);
-    let current_machine_processes = loaded_store.get_machine_processes_mut(store_path);
-    current_machine_processes.push(new_process);
-
-    let mut file = File::create(&file_path).unwrap();
-    let serialized = serde_json::to_string(&loaded_store).unwrap();
-    file.write_all(serialized.as_bytes()).unwrap();
-
-    let file = File::open(&file_path).unwrap();
-    let final_store: LachesStore = serde_json::from_reader(file).unwrap();
-    let machine_id = get_machine_id(store_path);
-    let processes = final_store.machine_data.get(&machine_id).unwrap();
-    assert_eq!(processes.len(), 1);
-    assert_eq!(processes[0].title, "test_process");
-    assert_eq!(processes[0].get_total_usage(), 5);
+    let open = db.get_open_session().unwrap();
+    assert!(open.is_some());
+    assert_eq!(open.unwrap().process_name, "test_process");
 }
 
 #[test]
-fn test_update_existing_process() {
-    let temp_dir = TempDir::new().unwrap();
-    let store_path = temp_dir.path();
-
-    let mut store = LachesStore::default();
-    let machine_id = get_machine_id(store_path);
-    let mut process = Process::new("existing_process".to_string());
-    process.add_time(10);
-    store.machine_data.insert(machine_id.clone(), vec![process]);
-
-    let file_path = store_path.join(STORE_NAME);
-    let mut file = File::create(&file_path).unwrap();
-    let serialized = serde_json::to_string(&store).unwrap();
-    file.write_all(serialized.as_bytes()).unwrap();
-
-    let file = File::open(&file_path).unwrap();
-    let mut loaded_store: LachesStore = serde_json::from_reader(file).unwrap();
-
-    let current_machine_processes = loaded_store.get_machine_processes_mut(store_path);
-    for stored_process in current_machine_processes.iter_mut() {
-        if stored_process.title == "existing_process" {
-            stored_process.add_time(5);
-            break;
-        }
-    }
-
-    let mut file = File::create(&file_path).unwrap();
-    let serialized = serde_json::to_string(&loaded_store).unwrap();
-    file.write_all(serialized.as_bytes()).unwrap();
-
-    let file = File::open(&file_path).unwrap();
-    let final_store: LachesStore = serde_json::from_reader(file).unwrap();
-    let machine_id = get_machine_id(store_path);
-    let processes = final_store.machine_data.get(&machine_id).unwrap();
-    assert_eq!(processes.len(), 1);
-    assert_eq!(processes[0].get_total_usage(), 15);
+fn test_focus_tracker_does_not_panic() {
+    let tracker = create_tracker();
+    // should not panic on any platform, even without a desktop session
+    let _ = tracker.get_focused_window();
+    let _ = tracker.get_idle_duration();
 }
 
 #[test]
-fn test_multiple_tick_cycles() {
+fn test_session_lifecycle() {
     let temp_dir = TempDir::new().unwrap();
-    let store_path = temp_dir.path();
+    let machine_id = get_machine_id(temp_dir.path());
+    let data_dir = laches::config::data_dir(temp_dir.path());
+    std::fs::create_dir_all(&data_dir).unwrap();
 
-    let mut store = LachesStore::default();
-    store.update_interval = 5;
+    let db_path = machine_db_path(temp_dir.path(), &machine_id);
+    let db = Database::open(&db_path).unwrap();
 
-    let file_path = store_path.join(STORE_NAME);
-    let mut file = File::create(&file_path).unwrap();
-    let serialized = serde_json::to_string(&store).unwrap();
-    file.write_all(serialized.as_bytes()).unwrap();
+    // simulate daemon: start session, end it, start another
+    let s1 = db
+        .start_session("firefox", None, Some("GitHub"), false)
+        .unwrap();
+    db.end_session(s1).unwrap();
 
-    for _cycle in 1..=3 {
-        let file = File::open(&file_path).unwrap();
-        let mut loaded_store: LachesStore = serde_json::from_reader(file).unwrap();
+    let s2 = db
+        .start_session("code", None, Some("main.rs"), false)
+        .unwrap();
+    db.end_session(s2).unwrap();
 
-        let current_machine_processes = loaded_store.get_machine_processes_mut(store_path);
-        let mut found = false;
-        for stored_process in current_machine_processes.iter_mut() {
-            if stored_process.title == "test_process" {
-                stored_process.add_time(store.update_interval);
-                found = true;
-                break;
-            }
-        }
-
-        if !found {
-            let mut new_process = Process::new("test_process".to_string());
-            new_process.add_time(store.update_interval);
-            current_machine_processes.push(new_process);
-        }
-
-        let mut file = File::create(&file_path).unwrap();
-        let serialized = serde_json::to_string(&loaded_store).unwrap();
-        file.write_all(serialized.as_bytes()).unwrap();
-    }
-
-    let file = File::open(&file_path).unwrap();
-    let final_store: LachesStore = serde_json::from_reader(file).unwrap();
-    let machine_id = get_machine_id(store_path);
-    let processes = final_store.machine_data.get(&machine_id).unwrap();
-    assert_eq!(processes.len(), 1);
-    assert_eq!(processes[0].title, "test_process");
-    assert_eq!(processes[0].get_total_usage(), 15); // 3 cycles * 5 seconds
+    let tracked = db.get_tracked_processes().unwrap();
+    assert_eq!(tracked.len(), 2);
+    assert!(tracked.contains(&"code".to_string()));
+    assert!(tracked.contains(&"firefox".to_string()));
 }
 
 #[test]
-fn test_get_active_processes_integration() {
-    let processes = get_active_processes();
-
-    for process in &processes {
-        assert!(!process.title.is_empty());
-        assert_eq!(process.get_total_usage(), 0); // new processes start with 0 uptime
-    }
-}
-
-#[test]
-fn test_concurrent_process_tracking() {
+fn test_stale_session_cleanup() {
     let temp_dir = TempDir::new().unwrap();
-    let store_path = temp_dir.path();
+    let machine_id = get_machine_id(temp_dir.path());
+    let data_dir = laches::config::data_dir(temp_dir.path());
+    std::fs::create_dir_all(&data_dir).unwrap();
 
-    // Create initial store
-    let mut store = LachesStore::default();
-    store.update_interval = 5;
+    let db_path = machine_db_path(temp_dir.path(), &machine_id);
+    let db = Database::open(&db_path).unwrap();
 
-    let file_path = store_path.join(STORE_NAME);
-    let mut file = File::create(&file_path).unwrap();
-    let serialized = serde_json::to_string(&store).unwrap();
-    file.write_all(serialized.as_bytes()).unwrap();
+    // simulate a crash: session left open
+    db.start_session("firefox", None, None, false).unwrap();
+    db.start_session("code", None, None, false).unwrap();
 
-    let processes_to_track = vec!["process1", "process2", "process3"];
+    let open = db.get_open_session().unwrap();
+    assert!(open.is_some());
 
-    for process_name in &processes_to_track {
-        let file = File::open(&file_path).unwrap();
-        let mut loaded_store: LachesStore = serde_json::from_reader(file).unwrap();
+    // close all stale sessions (like daemon does on startup)
+    let closed = db.close_all_open_sessions().unwrap();
+    assert_eq!(closed, 2);
 
-        let mut new_process = Process::new(process_name.to_string());
-        new_process.add_time(5);
-        let current_machine_processes = loaded_store.get_machine_processes_mut(store_path);
-        current_machine_processes.push(new_process);
-
-        let mut file = File::create(&file_path).unwrap();
-        let serialized = serde_json::to_string(&loaded_store).unwrap();
-        file.write_all(serialized.as_bytes()).unwrap();
-    }
-
-    let file = File::open(&file_path).unwrap();
-    let final_store: LachesStore = serde_json::from_reader(file).unwrap();
-    let machine_id = get_machine_id(store_path);
-    let processes = final_store.machine_data.get(&machine_id).unwrap();
-    assert_eq!(processes.len(), 3);
-
-    let titles: Vec<String> = processes.iter().map(|p| p.title.clone()).collect();
-
-    for process_name in &processes_to_track {
-        assert!(titles.contains(&process_name.to_string()));
-    }
-}
-
-#[test]
-fn test_store_persistence() {
-    let temp_dir = TempDir::new().unwrap();
-    let store_path = temp_dir.path();
-
-    let mut store = LachesStore::default();
-    let machine_id = get_machine_id(store_path);
-    let mut process = Process::new("persistent_process".to_string());
-    process.add_time(100);
-    store.machine_data.insert(machine_id.clone(), vec![process]);
-
-    let file_path = store_path.join(STORE_NAME);
-    let mut file = File::create(&file_path).unwrap();
-    let serialized = serde_json::to_string(&store).unwrap();
-    file.write_all(serialized.as_bytes()).unwrap();
-
-    thread::sleep(Duration::from_millis(10));
-
-    let file = File::open(&file_path).unwrap();
-    let loaded_store: LachesStore = serde_json::from_reader(file).unwrap();
-
-    let machine_id = get_machine_id(store_path);
-    let processes = loaded_store.machine_data.get(&machine_id).unwrap();
-    assert_eq!(processes.len(), 1);
-    assert_eq!(processes[0].title, "persistent_process");
-    assert_eq!(processes[0].get_total_usage(), 100);
+    let open = db.get_open_session().unwrap();
+    assert!(open.is_none());
 }

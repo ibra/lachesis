@@ -1,88 +1,134 @@
+use laches::{
+    config::{get_machine_id, load_or_create_config},
+    db::Database,
+    platform::{create_tracker, FocusInfo},
+};
 use std::{
     env,
-    fs::{self, File},
-    io::{BufReader, Write},
     path::Path,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
-
-use laches::{process::get_active_processes, store::LachesStore};
-
-fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Error> {
-    let file = File::open(store_path)?;
-
-    let reader = BufReader::new(&file);
-    let mut r_store: LachesStore = serde_json::from_reader(reader)?;
-
-    let store_dir = store_path.parent().unwrap_or(store_path);
-    let current_machine_processes = r_store.get_machine_processes_mut(store_dir);
-
-    for active_process in get_active_processes() {
-        let mut found: bool = false;
-
-        for stored_process in current_machine_processes.iter_mut() {
-            if active_process.title == stored_process.title {
-                stored_process.add_time(update_interval.as_secs());
-                found = true;
-                break;
-            }
-        }
-
-        if !found {
-            let mut new_process = active_process;
-            new_process.add_time(update_interval.as_secs());
-            current_machine_processes.push(new_process);
-        }
-    }
-
-    let serialized_store = serde_json::to_string_pretty(&r_store)?;
-
-    let tmp_path = store_path.with_extension("json.tmp");
-    let mut tmp_file = File::create(&tmp_path)?;
-    tmp_file.write_all(serialized_store.as_bytes())?;
-    tmp_file.flush()?;
-
-    fs::rename(&tmp_path, store_path)?;
-    Ok(())
-}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() != 3 {
-        eprintln!("usage: laches_mon <update_interval> <path/to/store>");
-        return;
+    if args.len() != 2 {
+        eprintln!("usage: laches_mon <config_dir>");
+        std::process::exit(1);
     }
 
-    let update_interval: Duration = match args[1].parse() {
-        Ok(num) => Duration::from_secs(num),
-        Err(err) => {
-            eprintln!("error: {}", err);
-            eprintln!("usage: laches_mon <update_interval>");
-            return;
-        }
-    };
+    let config_dir = Path::new(&args[1]);
 
-    let file_path = Path::new(args[2].as_str());
-
-    if !file_path.exists() {
-        println!(
-            "error: store file does not exist at location:  \"{0}\"",
-            &file_path.display()
+    if !config_dir.exists() {
+        eprintln!(
+            "error: config directory does not exist: {}",
+            config_dir.display()
         );
         std::process::exit(1);
     }
 
-    let mut last_tick = Instant::now();
-
-    loop {
-        let elapsed = last_tick.elapsed();
-        if elapsed >= update_interval {
-            tick(file_path, &update_interval)
-                .expect("error: daemon failed while monitoring windows");
-            last_tick = Instant::now();
+    // load config once at startup
+    let config = match load_or_create_config(config_dir) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error: failed to load config: {}", e);
+            std::process::exit(1);
         }
-        thread::sleep(update_interval);
+    };
+
+    // open the per-machine database
+    let machine_id = get_machine_id(config_dir);
+    let data_dir = laches::config::data_dir(config_dir);
+    if let Err(e) = std::fs::create_dir_all(&data_dir) {
+        eprintln!("error: failed to create data directory: {}", e);
+        std::process::exit(1);
     }
+
+    let db_path = laches::config::machine_db_path(config_dir, &machine_id);
+    let db = match Database::open(&db_path) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("error: failed to open database: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // close any sessions left open from a previous crash
+    if let Ok(count) = db.close_all_open_sessions() {
+        if count > 0 {
+            eprintln!("info: closed {} stale sessions from previous run", count);
+        }
+    }
+
+    // set up signal handler for clean shutdown
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })
+    .expect("error: failed to set signal handler");
+
+    let tracker = create_tracker();
+    let check_interval = Duration::from_secs(config.daemon.check_interval);
+    let idle_timeout = Duration::from_secs(config.daemon.idle_timeout);
+
+    let mut last_focus: Option<FocusInfo> = None;
+    let mut was_idle = false;
+    let mut current_session_id: Option<i64> = None;
+
+    while running.load(Ordering::SeqCst) {
+        let focused = tracker.get_focused_window();
+        let idle_duration = tracker.get_idle_duration();
+        let is_idle = idle_duration >= idle_timeout;
+
+        let focus_changed = focused != last_focus;
+        let idle_changed = is_idle != was_idle;
+
+        if focus_changed || idle_changed {
+            // end the current session if there is one
+            if let Some(sid) = current_session_id.take() {
+                if let Err(e) = db.end_session(sid) {
+                    eprintln!("warning: failed to end session: {}", e);
+                }
+            }
+
+            // start a new session if there's a focused window
+            if is_idle {
+                // record idle session
+                match db.start_session("idle", None, None, true) {
+                    Ok(sid) => current_session_id = Some(sid),
+                    Err(e) => eprintln!("warning: failed to start idle session: {}", e),
+                }
+            } else if let Some(ref info) = focused {
+                match db.start_session(
+                    &info.process_name,
+                    info.exe_path.as_deref(),
+                    info.window_title.as_deref(),
+                    false,
+                ) {
+                    Ok(sid) => current_session_id = Some(sid),
+                    Err(e) => eprintln!("warning: failed to start session: {}", e),
+                }
+            }
+
+            last_focus = focused;
+            was_idle = is_idle;
+        }
+
+        thread::sleep(check_interval);
+    }
+
+    // clean shutdown: end the current session
+    if let Some(sid) = current_session_id {
+        if let Err(e) = db.end_session(sid) {
+            eprintln!("warning: failed to end session on shutdown: {}", e);
+        }
+    }
+
+    eprintln!("info: laches_mon stopped cleanly");
 }
