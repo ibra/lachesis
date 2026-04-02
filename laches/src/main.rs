@@ -25,10 +25,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut laches_store = load_or_create_store(&store_path)?;
     let cli = Cli::parse();
 
-    let machine_id_path = store_path.join(".machine_id");
-    if !machine_id_path.exists() {
-        let _ = get_machine_id(&store_path);
-    }
+    // ensure machine id exists for this machine
+    get_machine_id(&store_path);
 
     let mut skip_save = false;
 
