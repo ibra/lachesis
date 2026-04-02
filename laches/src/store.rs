@@ -72,8 +72,12 @@ pub fn get_machine_id(store_path: &Path) -> String {
     let uuid = Uuid::new_v4();
     let machine_id = format!("{}_{}", hostname, uuid);
 
-    let _ = std::fs::create_dir_all(store_path);
-    let _ = std::fs::write(&machine_id_file, &machine_id);
+    if let Err(e) = std::fs::create_dir_all(store_path) {
+        eprintln!("warning: failed to create store directory: {}", e);
+    }
+    if let Err(e) = std::fs::write(&machine_id_file, &machine_id) {
+        eprintln!("warning: failed to write machine id file: {}", e);
+    }
 
     machine_id
 }
@@ -159,17 +163,22 @@ impl LachesStore {
 
 pub fn save_store(store: &LachesStore, store_path: &Path) -> Result<(), Box<dyn Error>> {
     let file_path = store_path.join(STORE_NAME);
-    let mut file = File::create(file_path)?;
+    let tmp_path = store_path.join(".store.json.tmp");
 
-    let laches_store = serde_json::to_string(store)?;
-    file.write_all(laches_store.as_bytes())?;
+    let serialized = serde_json::to_string_pretty(store)?;
+
+    let mut tmp_file = File::create(&tmp_path)?;
+    tmp_file.write_all(serialized.as_bytes())?;
+    tmp_file.flush()?;
+
+    fs::rename(&tmp_path, &file_path)?;
 
     Ok(())
 }
 
 pub fn load_or_create_store(store_path: &Path) -> Result<LachesStore, Box<dyn Error>> {
-    if !&store_path.join(STORE_NAME).exists() {
-        fs::create_dir_all(store_path).expect("error: failed to create directories");
+    if !store_path.join(STORE_NAME).exists() {
+        fs::create_dir_all(store_path)?;
 
         let mut file = OpenOptions::new()
             .create(true)
@@ -177,7 +186,7 @@ pub fn load_or_create_store(store_path: &Path) -> Result<LachesStore, Box<dyn Er
             .write(true)
             .open(store_path.join(STORE_NAME))?;
 
-        let laches_store = serde_json::to_string(&LachesStore::default())?;
+        let laches_store = serde_json::to_string_pretty(&LachesStore::default())?;
         println!("info: created default configuration file");
         file.write_all(laches_store.as_bytes())?;
     }
@@ -189,9 +198,9 @@ pub fn load_or_create_store(store_path: &Path) -> Result<LachesStore, Box<dyn Er
     Ok(laches_store)
 }
 
-pub fn reset_store(store_path: &Path) -> std::io::Result<()> {
+pub fn reset_store(store_path: &Path) -> Result<(), Box<dyn Error>> {
     fs::remove_file(store_path.join(STORE_NAME))?;
-    load_or_create_store(store_path).expect("error: failed to create default config file");
+    load_or_create_store(store_path)?;
 
     Ok(())
 }

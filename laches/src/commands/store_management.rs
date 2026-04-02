@@ -8,7 +8,8 @@ use colored::Colorize;
 
 pub fn confirm_reset_store(store_path: &Path) -> Result<(), Box<dyn Error>> {
     if confirm("are you sure you want to wipe the current store? [y/N]") {
-        reset_store(store_path).expect("error: failed to reset store file");
+        reset_store(store_path)?;
+        println!("info: store has been reset to defaults");
     } else {
         println!("info: aborted reset operation");
     }

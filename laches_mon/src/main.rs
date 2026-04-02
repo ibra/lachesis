@@ -1,8 +1,7 @@
 use std::{
     env,
-    fs::File,
+    fs::{self, File},
     io::{BufReader, Write},
-    panic,
     path::Path,
     thread,
     time::{Duration, Instant},
@@ -37,14 +36,14 @@ fn tick(store_path: &Path, update_interval: &Duration) -> Result<(), std::io::Er
         }
     }
 
-    let serialized_store = serde_json::to_string(&r_store)?;
+    let serialized_store = serde_json::to_string_pretty(&r_store)?;
 
-    let mut w_store = match File::create(store_path) {
-        Err(err) => panic!("error: couldn't write to file: {}", err),
-        Ok(file) => file,
-    };
+    let tmp_path = store_path.with_extension("json.tmp");
+    let mut tmp_file = File::create(&tmp_path)?;
+    tmp_file.write_all(serialized_store.as_bytes())?;
+    tmp_file.flush()?;
 
-    w_store.write_all(serialized_store.as_bytes())?;
+    fs::rename(&tmp_path, store_path)?;
     Ok(())
 }
 
