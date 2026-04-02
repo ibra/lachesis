@@ -30,6 +30,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let _ = get_machine_id(&store_path);
     }
 
+    let mut skip_save = false;
+
     match &cli.command {
         Commands::Start => start_monitoring(&mut laches_store, &store_path),
         Commands::Stop => stop_monitoring(&mut laches_store),
@@ -86,11 +88,16 @@ fn main() -> Result<(), Box<dyn Error>> {
             DataAction::Delete { all, duration } => {
                 confirm_delete_store(&mut laches_store, &store_path, *all, duration.as_deref())
             }
-            DataAction::Reset => confirm_reset_store(&store_path),
+            DataAction::Reset => {
+                skip_save = true;
+                confirm_reset_store(&store_path)
+            }
         },
     }?;
 
-    save_store(&laches_store, &store_path)?;
+    if !skip_save {
+        save_store(&laches_store, &store_path)?;
+    }
 
     Ok(())
 }
