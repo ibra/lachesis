@@ -35,6 +35,15 @@ pub fn handle_autostart(
         store_file.to_string_lossy().to_string(),
     ];
 
+    #[cfg(target_os = "macos")]
+    let auto = AutoLaunch::new(
+        "laches_mon",
+        laches_mon_path.to_str().ok_or("Invalid path")?,
+        &args,
+        false,
+    );
+
+    #[cfg(not(target_os = "macos"))]
     let auto = AutoLaunch::new(
         "laches_mon",
         laches_mon_path.to_str().ok_or("Invalid path")?,
