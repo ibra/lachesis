@@ -1,6 +1,6 @@
-use std::{error::Error, path::Path};
+use std::{error::Error, fs, path::Path};
 
-use crate::store::{get_machine_id, LachesStore};
+use crate::store::{get_machine_id, LachesStore, STORE_NAME};
 
 pub fn show_config(laches_store: &LachesStore, store_path: &Path) -> Result<(), Box<dyn Error>> {
     println!("Configuration:");
@@ -35,9 +35,41 @@ pub fn show_config(laches_store: &LachesStore, store_path: &Path) -> Result<(), 
     Ok(())
 }
 
-#[allow(unused_variables)]
 pub fn set_store_path(store_path: &Path, target_path: &str) -> Result<(), Box<dyn Error>> {
-    // todo: implement changing of paths
+    let target = Path::new(target_path);
+
+    if target == store_path {
+        println!("info: store path is already set to '{}'", target_path);
+        return Ok(());
+    }
+
+    fs::create_dir_all(target)?;
+
+    let source_store = store_path.join(STORE_NAME);
+    let target_store = target.join(STORE_NAME);
+
+    if source_store.exists() {
+        fs::copy(&source_store, &target_store)?;
+        println!(
+            "info: copied store from '{}' to '{}'",
+            source_store.display(),
+            target_store.display()
+        );
+    }
+
+    let source_machine_id = store_path.join(".machine_id");
+    let target_machine_id = target.join(".machine_id");
+
+    if source_machine_id.exists() {
+        fs::copy(&source_machine_id, &target_machine_id)?;
+    }
+
+    println!(
+        "info: store path set to '{}'. you can remove the old directory at '{}'",
+        target_path,
+        store_path.display()
+    );
+
     Ok(())
 }
 
@@ -57,11 +89,28 @@ mod tests {
     }
 
     #[test]
-    fn test_set_store_path_guide() {
+    fn test_set_store_path_copies_data() {
+        let source_dir = TempDir::new().unwrap();
+        let target_dir = TempDir::new().unwrap();
+        let source_path = source_dir.path();
+        let target_path = target_dir.path().join("new_store");
+
+        // Create a store file in the source
+        let store = LachesStore::default();
+        crate::store::save_store(&store, source_path).unwrap();
+        assert!(source_path.join(STORE_NAME).exists());
+
+        let result = set_store_path(source_path, target_path.to_str().unwrap());
+        assert!(result.is_ok());
+        assert!(target_path.join(STORE_NAME).exists());
+    }
+
+    #[test]
+    fn test_set_store_path_same_path() {
         let temp_dir = TempDir::new().unwrap();
         let store_path = temp_dir.path();
 
-        let result = set_store_path(store_path, "/home/user/Dropbox/laches");
+        let result = set_store_path(store_path, store_path.to_str().unwrap());
         assert!(result.is_ok());
     }
 }
