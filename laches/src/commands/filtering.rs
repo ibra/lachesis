@@ -2,6 +2,7 @@ use crate::{cli::FilterListAction, store::LachesStore, utils::confirm};
 use colored::Colorize;
 use regex::Regex;
 use std::error::Error;
+use std::path::Path;
 
 /// Check if a process name matches any pattern in the list (supports both exact matches and regex)
 pub fn matches_any_pattern(process_name: &str, patterns: &[String]) -> bool {
@@ -21,11 +22,12 @@ pub fn matches_any_pattern(process_name: &str, patterns: &[String]) -> bool {
 
 pub fn handle_whitelist(
     laches_store: &mut LachesStore,
+    store_path: &Path,
     action: &FilterListAction,
 ) -> Result<(), Box<dyn Error>> {
     match action {
         FilterListAction::Add { process, regex } => {
-            add_to_list(laches_store, process, *regex, true)?;
+            add_to_list(laches_store, store_path, process, *regex, true)?;
         }
         FilterListAction::Remove { process } => {
             remove_from_list(laches_store, process, true)?;
@@ -42,11 +44,12 @@ pub fn handle_whitelist(
 
 pub fn handle_blacklist(
     laches_store: &mut LachesStore,
+    store_path: &Path,
     action: &FilterListAction,
 ) -> Result<(), Box<dyn Error>> {
     match action {
         FilterListAction::Add { process, regex } => {
-            add_to_list(laches_store, process, *regex, false)?;
+            add_to_list(laches_store, store_path, process, *regex, false)?;
         }
         FilterListAction::Remove { process } => {
             remove_from_list(laches_store, process, false)?;
@@ -63,6 +66,7 @@ pub fn handle_blacklist(
 
 fn add_to_list(
     laches_store: &mut LachesStore,
+    store_path: &Path,
     pattern: &str,
     is_regex: bool,
     is_whitelist: bool,
@@ -81,7 +85,7 @@ fn add_to_list(
 
         let regex = regex_result.unwrap();
 
-        let existing_processes = laches_store.get_current_machine_processes();
+        let existing_processes = laches_store.get_machine_processes(store_path);
         let matched_processes: Vec<&String> = existing_processes
             .iter()
             .filter(|p| regex.is_match(&p.title))

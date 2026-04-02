@@ -53,6 +53,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             list,
         } => handle_tag_command(
             &mut laches_store,
+            &store_path,
             process,
             add.as_deref(),
             remove.as_deref(),
@@ -63,17 +64,27 @@ fn main() -> Result<(), Box<dyn Error>> {
             ConfigAction::SetStorePath { path } => set_store_path(&store_path, path),
             ConfigAction::Autostart { toggle } => handle_autostart(toggle, &store_path),
             ConfigAction::Mode { mode } => set_mode(mode, &mut laches_store),
-            ConfigAction::Whitelist { action } => handle_whitelist(&mut laches_store, action),
-            ConfigAction::Blacklist { action } => handle_blacklist(&mut laches_store, action),
+            ConfigAction::Whitelist { action } => {
+                handle_whitelist(&mut laches_store, &store_path, action)
+            }
+            ConfigAction::Blacklist { action } => {
+                handle_blacklist(&mut laches_store, &store_path, action)
+            }
         },
         Commands::Data { action } => match action {
             DataAction::Export {
                 output,
                 duration,
                 all_machines,
-            } => export_store(&laches_store, output, duration.as_deref(), *all_machines),
+            } => export_store(
+                &laches_store,
+                &store_path,
+                output,
+                duration.as_deref(),
+                *all_machines,
+            ),
             DataAction::Delete { all, duration } => {
-                confirm_delete_store(&mut laches_store, *all, duration.as_deref())
+                confirm_delete_store(&mut laches_store, &store_path, *all, duration.as_deref())
             }
             DataAction::Reset => confirm_reset_store(&store_path),
         },
