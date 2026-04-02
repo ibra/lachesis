@@ -64,7 +64,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Config { action } => match action {
             ConfigAction::Show => show_config(&laches_store, &store_path),
             ConfigAction::SetStorePath { path } => set_store_path(&store_path, path),
-            ConfigAction::Autostart { toggle } => handle_autostart(toggle, &store_path),
+            ConfigAction::Autostart { toggle } => {
+                handle_autostart(&mut laches_store, toggle, &store_path)
+            }
             ConfigAction::Mode { mode } => set_mode(mode, &mut laches_store),
             ConfigAction::Whitelist { action } => {
                 handle_whitelist(&mut laches_store, &store_path, action)
