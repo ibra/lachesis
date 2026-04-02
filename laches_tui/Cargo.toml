@@ -1,0 +1,15 @@
+[package]
+name = "laches_tui"
+version = "0.1.0"
+edition = "2021"
+authors = ["Ibrahim Hisham <ibrahim.hisham@proton.me>"]
+license = "MIT"
+
+[dependencies]
+laches = { path = "../laches" }
+
+chrono.workspace = true
+crossterm.workspace = true
+dirs = "5.0.1"
+ratatui.workspace = true
+rusqlite.workspace = true
