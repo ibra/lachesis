@@ -1,6 +1,6 @@
 use laches::{
-    commands::filtering::matches_any_pattern,
-    config::{get_machine_id, load_or_create_config, FilterMode},
+    commands::filtering::CompiledFilter,
+    config::{get_machine_id, load_or_create_config},
     db::Database,
     platform::{create_tracker, FocusInfo},
 };
@@ -40,20 +40,6 @@ impl DaemonLogger {
     }
 }
 
-/// Check if a process should be tracked based on the current filtering config.
-fn should_track(
-    process_name: &str,
-    mode: &FilterMode,
-    whitelist: &[laches::config::FilterPattern],
-    blacklist: &[laches::config::FilterPattern],
-) -> bool {
-    match mode {
-        FilterMode::Default => true,
-        FilterMode::Whitelist => matches_any_pattern(process_name, whitelist),
-        FilterMode::Blacklist => !matches_any_pattern(process_name, blacklist),
-    }
-}
-
 fn init_daemon(config_dir: &Path) -> (Database, laches::config::Config, DaemonLogger, PathBuf) {
     let mut logger = DaemonLogger::open(config_dir).expect("error: failed to open daemon.log");
 
@@ -88,6 +74,7 @@ fn init_daemon(config_dir: &Path) -> (Database, laches::config::Config, DaemonLo
 fn run_monitor(
     db: &Database,
     config: &laches::config::Config,
+    filter: &CompiledFilter,
     logger: &mut DaemonLogger,
     tracker: &dyn laches::platform::FocusTracker,
     running: &AtomicBool,
@@ -108,27 +95,19 @@ fn run_monitor(
         let idle_changed = is_idle != was_idle;
 
         if focus_changed || idle_changed {
-            // end the current session if there is one
             if let Some(sid) = current_session_id.take() {
                 if let Err(e) = db.end_session(sid) {
                     logger.log(&format!("warning: failed to end session: {}", e));
                 }
             }
 
-            // start a new session based on current state
             if is_idle {
                 match db.start_session("idle", None, None, true) {
                     Ok(sid) => current_session_id = Some(sid),
                     Err(e) => logger.log(&format!("warning: failed to start idle session: {}", e)),
                 }
             } else if let Some(ref info) = focused {
-                // apply filtering before recording
-                if should_track(
-                    &info.process_name,
-                    &config.filtering.mode,
-                    &config.filtering.whitelist,
-                    &config.filtering.blacklist,
-                ) {
+                if filter.should_track(&info.process_name) {
                     match db.start_session(
                         &info.process_name,
                         info.exe_path.as_deref(),
@@ -148,7 +127,6 @@ fn run_monitor(
         thread::sleep(check_interval);
     }
 
-    // clean shutdown: end the current session
     if let Some(sid) = current_session_id {
         if let Err(e) = db.end_session(sid) {
             logger.log(&format!(
@@ -198,51 +176,62 @@ fn main() {
     .expect("error: failed to set signal handler");
 
     let tracker = create_tracker();
+    let filter = CompiledFilter::new(
+        config.filtering.mode.clone(),
+        &config.filtering.whitelist,
+        &config.filtering.blacklist,
+    );
 
     logger.log(&format!(
         "started (interval={}s, idle_timeout={}s, filter={})",
         config.daemon.check_interval, config.daemon.idle_timeout, config.filtering.mode
     ));
 
-    run_monitor(&db, &config, &mut logger, tracker.as_ref(), &running);
+    run_monitor(
+        &db,
+        &config,
+        &filter,
+        &mut logger,
+        tracker.as_ref(),
+        &running,
+    );
 
     logger.log("stopped cleanly");
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use laches::commands::filtering::CompiledFilter;
     use laches::config::{FilterMode, FilterPattern};
 
     #[test]
     fn test_should_track_default_mode() {
-        let wl = vec![];
-        let bl = vec![];
-        assert!(should_track("anything", &FilterMode::Default, &wl, &bl));
+        let f = CompiledFilter::new(FilterMode::Default, &[], &[]);
+        assert!(f.should_track("anything"));
     }
 
     #[test]
     fn test_should_track_whitelist_mode() {
         let wl = vec![FilterPattern::exact("firefox")];
-        let bl = vec![];
-        assert!(should_track("firefox", &FilterMode::Whitelist, &wl, &bl));
-        assert!(!should_track("chrome", &FilterMode::Whitelist, &wl, &bl));
+        let f = CompiledFilter::new(FilterMode::Whitelist, &wl, &[]);
+        assert!(f.should_track("firefox"));
+        assert!(!f.should_track("chrome"));
     }
 
     #[test]
     fn test_should_track_blacklist_mode() {
-        let wl = vec![];
         let bl = vec![FilterPattern::exact("discord")];
-        assert!(!should_track("discord", &FilterMode::Blacklist, &wl, &bl));
-        assert!(should_track("firefox", &FilterMode::Blacklist, &wl, &bl));
+        let f = CompiledFilter::new(FilterMode::Blacklist, &[], &bl);
+        assert!(!f.should_track("discord"));
+        assert!(f.should_track("firefox"));
     }
 
     #[test]
     fn test_should_track_regex_patterns() {
         let wl = vec![FilterPattern::regex("^(firefox|chrome)$")];
-        let bl = vec![];
-        assert!(should_track("firefox", &FilterMode::Whitelist, &wl, &bl));
-        assert!(should_track("chrome", &FilterMode::Whitelist, &wl, &bl));
-        assert!(!should_track("discord", &FilterMode::Whitelist, &wl, &bl));
+        let f = CompiledFilter::new(FilterMode::Whitelist, &wl, &[]);
+        assert!(f.should_track("firefox"));
+        assert!(f.should_track("chrome"));
+        assert!(!f.should_track("discord"));
     }
 }

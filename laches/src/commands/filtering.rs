@@ -1,4 +1,4 @@
-use crate::config::FilterPattern;
+use crate::config::{FilterMode, FilterPattern};
 use regex::Regex;
 
 /// Check if a process name matches any pattern in the list.
@@ -21,6 +21,63 @@ pub fn matches_any_pattern(process_name: &str, patterns: &[FilterPattern]) -> bo
         }
     }
     false
+}
+
+enum CompiledPattern {
+    Exact(String),
+    Regex(Regex),
+}
+
+impl CompiledPattern {
+    fn matches(&self, name: &str) -> bool {
+        match self {
+            CompiledPattern::Exact(s) => {
+                if cfg!(windows) {
+                    s.eq_ignore_ascii_case(name)
+                } else {
+                    s == name
+                }
+            }
+            CompiledPattern::Regex(r) => r.is_match(name),
+        }
+    }
+}
+
+pub struct CompiledFilter {
+    mode: FilterMode,
+    whitelist: Vec<CompiledPattern>,
+    blacklist: Vec<CompiledPattern>,
+}
+
+impl CompiledFilter {
+    pub fn new(mode: FilterMode, whitelist: &[FilterPattern], blacklist: &[FilterPattern]) -> Self {
+        Self {
+            mode,
+            whitelist: Self::compile_patterns(whitelist),
+            blacklist: Self::compile_patterns(blacklist),
+        }
+    }
+
+    fn compile_patterns(patterns: &[FilterPattern]) -> Vec<CompiledPattern> {
+        patterns
+            .iter()
+            .filter_map(|p| {
+                if p.is_regex {
+                    Regex::new(&p.pattern).ok().map(CompiledPattern::Regex)
+                } else {
+                    Some(CompiledPattern::Exact(p.pattern.clone()))
+                }
+            })
+            .collect()
+    }
+
+    pub fn should_track(&self, process_name: &str) -> bool {
+        match self.mode {
+            FilterMode::Default => true,
+            FilterMode::Whitelist => self.whitelist.iter().any(|p| p.matches(process_name)),
+            FilterMode::Blacklist => !self.blacklist.iter().any(|p| p.matches(process_name)),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -122,5 +179,43 @@ mod tests {
         assert!(matches_any_pattern("test123", &patterns));
         assert!(!matches_any_pattern("safari.exe", &patterns));
         assert!(!matches_any_pattern("nodigits", &patterns));
+    }
+
+    #[test]
+    fn test_compiled_filter_default() {
+        let f = CompiledFilter::new(FilterMode::Default, &[], &[]);
+        assert!(f.should_track("anything"));
+    }
+
+    #[test]
+    fn test_compiled_filter_whitelist() {
+        let wl = vec![
+            FilterPattern::exact("firefox"),
+            FilterPattern::regex("^chrom.*"),
+        ];
+        let f = CompiledFilter::new(FilterMode::Whitelist, &wl, &[]);
+        assert!(f.should_track("firefox"));
+        assert!(f.should_track("chrome"));
+        assert!(f.should_track("chromium"));
+        assert!(!f.should_track("discord"));
+    }
+
+    #[test]
+    fn test_compiled_filter_blacklist() {
+        let bl = vec![FilterPattern::exact("discord")];
+        let f = CompiledFilter::new(FilterMode::Blacklist, &[], &bl);
+        assert!(!f.should_track("discord"));
+        assert!(f.should_track("firefox"));
+    }
+
+    #[test]
+    fn test_compiled_filter_skips_invalid_regex() {
+        let wl = vec![
+            FilterPattern::regex("[invalid"),
+            FilterPattern::exact("valid"),
+        ];
+        let f = CompiledFilter::new(FilterMode::Whitelist, &wl, &[]);
+        assert!(f.should_track("valid"));
+        assert!(!f.should_track("invalid"));
     }
 }
