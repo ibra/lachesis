@@ -1,5 +1,5 @@
+use crate::error::LachesError;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::path::Path;
@@ -107,7 +107,7 @@ impl Default for Config {
 }
 
 /// Load config from disk, or create the default if it doesn't exist.
-pub fn load_or_create_config(config_dir: &Path) -> Result<Config, Box<dyn Error>> {
+pub fn load_or_create_config(config_dir: &Path) -> Result<Config, LachesError> {
     let config_path = config_dir.join(CONFIG_NAME);
 
     if config_path.exists() {
@@ -123,15 +123,17 @@ pub fn load_or_create_config(config_dir: &Path) -> Result<Config, Box<dyn Error>
     }
 }
 
-/// Validate config values to prevent misconfiguration.
-fn validate_config(config: &Config) -> Result<(), Box<dyn Error>> {
+fn validate_config(config: &Config) -> Result<(), LachesError> {
     if config.daemon.check_interval == 0 {
-        return Err("error: check_interval must be greater than 0".into());
+        return Err(LachesError::Config(
+            "check_interval must be greater than 0".to_string(),
+        ));
     }
     if config.daemon.idle_timeout == 0 {
-        return Err("error: idle_timeout must be greater than 0".into());
+        return Err(LachesError::Config(
+            "idle_timeout must be greater than 0".to_string(),
+        ));
     }
-    // validate that all regex patterns compile
     for p in config
         .filtering
         .whitelist
@@ -139,15 +141,15 @@ fn validate_config(config: &Config) -> Result<(), Box<dyn Error>> {
         .chain(config.filtering.blacklist.iter())
     {
         if p.is_regex {
-            regex::Regex::new(&p.pattern)
-                .map_err(|e| format!("error: invalid regex '{}': {}", p.pattern, e))?;
+            regex::Regex::new(&p.pattern).map_err(|e| {
+                LachesError::Config(format!("invalid regex '{}': {}", p.pattern, e))
+            })?;
         }
     }
     Ok(())
 }
 
-/// Write config to disk.
-pub fn save_config(config: &Config, config_dir: &Path) -> Result<(), Box<dyn Error>> {
+pub fn save_config(config: &Config, config_dir: &Path) -> Result<(), LachesError> {
     fs::create_dir_all(config_dir)?;
     let config_path = config_dir.join(CONFIG_NAME);
     let content = toml::to_string_pretty(config)?;
@@ -163,7 +165,7 @@ pub fn read_daemon_pid(config_dir: &Path) -> Option<u32> {
 }
 
 /// Write the daemon PID to the pid file.
-pub fn write_daemon_pid(config_dir: &Path, pid: u32) -> Result<(), Box<dyn Error>> {
+pub fn write_daemon_pid(config_dir: &Path, pid: u32) -> Result<(), LachesError> {
     let pid_path = config_dir.join(PID_FILE);
     fs::write(&pid_path, pid.to_string())?;
     Ok(())
