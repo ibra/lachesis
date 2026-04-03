@@ -6,13 +6,15 @@ use ratatui::{
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     if app.daily_totals.is_empty() || app.daily_totals.iter().all(|(_, v)| *v == 0) {
-        let empty = Paragraph::new(" no trend data available yet.")
-            .style(Style::default().fg(Color::DarkGray))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" trends (last 30 days) "),
-            );
+        let empty = Paragraph::new(
+            " no trend data available yet. usage will appear here after the first day.",
+        )
+        .style(Style::default().fg(Color::DarkGray))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" trends (last 30 days) "),
+        );
         frame.render_widget(empty, area);
         return;
     }
@@ -61,7 +63,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                     label.clone()
                 } else {
                     // short label: just the day part (after the /)
-                    label.split('/').last().unwrap_or("").to_string()
+                    label.split('/').next_back().unwrap_or("").to_string()
                 }
             } else {
                 String::new()
