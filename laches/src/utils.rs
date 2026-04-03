@@ -12,6 +12,35 @@ pub fn truncate_str(s: &str, max_chars: usize) -> String {
     }
 }
 
+/// Format a duration in seconds as a short string (hours, minutes, seconds).
+/// Used by TUI views for session-level precision.
+pub fn format_duration_short(seconds: i64) -> String {
+    let seconds = seconds.max(0);
+    let h = seconds / 3600;
+    let m = (seconds % 3600) / 60;
+    let s = seconds % 60;
+    if h > 0 {
+        format!("{}h {}m", h, m)
+    } else if m > 0 {
+        format!("{}m {}s", m, s)
+    } else {
+        format!("{}s", s)
+    }
+}
+
+/// Format a duration in seconds as a compact hours+minutes string (no seconds).
+/// Used for high-level summaries where seconds are noise.
+pub fn format_duration_hm(seconds: i64) -> String {
+    let seconds = seconds.max(0);
+    let h = seconds / 3600;
+    let m = (seconds % 3600) / 60;
+    if h > 0 {
+        format!("{}h {}m", h, m)
+    } else {
+        format!("{}m", m)
+    }
+}
+
 pub fn format_uptime(seconds: u64) -> String {
     let days = seconds / 86400;
     let hours = (seconds % 86400) / 3600;

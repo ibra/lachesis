@@ -25,6 +25,20 @@ pub struct ProcessSummary {
     pub active_days: i64,
 }
 
+/// Map a database row to a Session struct.
+/// Used by all session-returning queries to avoid duplication.
+fn map_session_row(row: &rusqlite::Row) -> SqlResult<Session> {
+    Ok(Session {
+        id: row.get(0)?,
+        process_name: row.get(1)?,
+        exe_path: row.get(2)?,
+        window_title: row.get(3)?,
+        start_time: row.get(4)?,
+        end_time: row.get(5)?,
+        idle: row.get::<_, i32>(6)? != 0,
+    })
+}
+
 /// Owns a SQLite connection and provides all data operations.
 pub struct Database {
     conn: Connection,
@@ -142,20 +156,11 @@ impl Database {
 
     /// Get the currently open session (if any).
     pub fn get_open_session(&self) -> SqlResult<Option<Session>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, process_name, exe_path, window_title, start_time, end_time, idle FROM sessions WHERE end_time IS NULL LIMIT 1")?;
-        let mut rows = stmt.query_map([], |row| {
-            Ok(Session {
-                id: row.get(0)?,
-                process_name: row.get(1)?,
-                exe_path: row.get(2)?,
-                window_title: row.get(3)?,
-                start_time: row.get(4)?,
-                end_time: row.get(5)?,
-                idle: row.get::<_, i32>(6)? != 0,
-            })
-        })?;
+        let mut stmt = self.conn.prepare(
+            "SELECT id, process_name, exe_path, window_title, start_time, end_time, idle
+             FROM sessions WHERE end_time IS NULL LIMIT 1",
+        )?;
+        let mut rows = stmt.query_map([], map_session_row)?;
         match rows.next() {
             Some(Ok(session)) => Ok(Some(session)),
             Some(Err(e)) => Err(e),
@@ -244,18 +249,7 @@ impl Database {
              ORDER BY start_time DESC",
         )?;
 
-        let rows = stmt.query_map(params![start_date, end_date], |row| {
-            Ok(Session {
-                id: row.get(0)?,
-                process_name: row.get(1)?,
-                exe_path: row.get(2)?,
-                window_title: row.get(3)?,
-                start_time: row.get(4)?,
-                end_time: row.get(5)?,
-                idle: row.get::<_, i32>(6)? != 0,
-            })
-        })?;
-
+        let rows = stmt.query_map(params![start_date, end_date], map_session_row)?;
         rows.collect()
     }
 
@@ -333,17 +327,7 @@ impl Database {
                 "SELECT id, process_name, exe_path, window_title, start_time, end_time, idle
                  FROM sessions ORDER BY start_time DESC",
             )?;
-            let rows = stmt.query_map([], |row| {
-                Ok(Session {
-                    id: row.get(0)?,
-                    process_name: row.get(1)?,
-                    exe_path: row.get(2)?,
-                    window_title: row.get(3)?,
-                    start_time: row.get(4)?,
-                    end_time: row.get(5)?,
-                    idle: row.get::<_, i32>(6)? != 0,
-                })
-            })?;
+            let rows = stmt.query_map([], map_session_row)?;
             rows.collect()
         }
     }
