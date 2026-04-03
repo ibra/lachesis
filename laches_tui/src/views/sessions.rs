@@ -15,8 +15,9 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         return;
     }
 
-    let max_visible = area.height.saturating_sub(3) as usize;
-    let scroll = app.scroll.min(non_idle.len().saturating_sub(max_visible));
+    // account for borders (2) + header row (1) + header bottom_margin (1) = 4
+    let max_visible = area.height.saturating_sub(4) as usize;
+    let scroll = app.scroll_offsets[3].min(non_idle.len().saturating_sub(max_visible));
 
     let rows: Vec<Row> = non_idle
         .iter()
