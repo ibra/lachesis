@@ -15,7 +15,7 @@ struct TimelineEntry {
 }
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
-    let sessions: Vec<_> = app.today_sessions.iter().filter(|s| !s.idle).collect();
+    let sessions: Vec<_> = app.sessions.iter().filter(|s| !s.idle).collect();
 
     if sessions.is_empty() {
         let empty =
@@ -26,7 +26,15 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
         return;
     }
 
-    let now = chrono::Local::now().naive_local();
+    let now = if app.is_viewing_today() {
+        chrono::Local::now().naive_local()
+    } else {
+        app.viewing_date
+            .succ_opt()
+            .unwrap_or(app.viewing_date)
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+    };
 
     let entries: Vec<TimelineEntry> = sessions
         .iter()

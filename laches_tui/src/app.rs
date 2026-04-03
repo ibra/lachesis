@@ -1,4 +1,4 @@
-use laches::db::{today_range, Database, ProcessSummary, Session};
+use laches::db::{date_range_for_day, Database, ProcessSummary, Session};
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Tabs},
@@ -13,13 +13,14 @@ const TAB_COUNT: usize = TAB_TITLES.len();
 pub struct App<'a> {
     pub db: &'a Database,
     pub tab: usize,
+    pub viewing_date: chrono::NaiveDate,
 
     pub scroll_offsets: [usize; TAB_COUNT],
 
-    pub today_summaries: Vec<ProcessSummary>,
-    pub today_sessions: Vec<Session>,
-    pub today_active: i64,
-    pub today_idle: i64,
+    pub summaries: Vec<ProcessSummary>,
+    pub sessions: Vec<Session>,
+    pub active_secs: i64,
+    pub idle_secs: i64,
     pub daily_totals: Vec<(String, i64)>,
     pub current_process: Option<String>,
     pub last_error: Option<String>,
@@ -30,15 +31,20 @@ impl<'a> App<'a> {
         Self {
             db,
             tab: 0,
+            viewing_date: chrono::Local::now().date_naive(),
             scroll_offsets: [0; TAB_COUNT],
-            today_summaries: Vec::new(),
-            today_sessions: Vec::new(),
-            today_active: 0,
-            today_idle: 0,
+            summaries: Vec::new(),
+            sessions: Vec::new(),
+            active_secs: 0,
+            idle_secs: 0,
             daily_totals: Vec::new(),
             current_process: None,
             last_error: None,
         }
+    }
+
+    pub fn is_viewing_today(&self) -> bool {
+        self.viewing_date == chrono::Local::now().date_naive()
     }
 
     pub fn set_tab(&mut self, tab: usize) {
@@ -59,6 +65,25 @@ impl<'a> App<'a> {
         };
     }
 
+    pub fn prev_day(&mut self) {
+        if let Some(d) = self.viewing_date.pred_opt() {
+            self.viewing_date = d;
+            self.scroll_offsets = [0; TAB_COUNT];
+            self.refresh_data();
+        }
+    }
+
+    pub fn next_day(&mut self) {
+        let today = chrono::Local::now().date_naive();
+        if let Some(d) = self.viewing_date.succ_opt() {
+            if d <= today {
+                self.viewing_date = d;
+                self.scroll_offsets = [0; TAB_COUNT];
+                self.refresh_data();
+            }
+        }
+    }
+
     pub fn scroll_up(&mut self) {
         self.scroll_offsets[self.tab] = self.scroll_offsets[self.tab].saturating_sub(1);
     }
@@ -72,53 +97,57 @@ impl<'a> App<'a> {
 
     fn scrollable_item_count(&self, tab: usize) -> usize {
         match tab {
-            0 => self.today_summaries.len(),
-            3 => self.today_sessions.iter().filter(|s| !s.idle).count(),
+            0 => self.summaries.len(),
+            3 => self.sessions.iter().filter(|s| !s.idle).count(),
             _ => 0,
         }
     }
 
     pub fn refresh_data(&mut self) {
         self.last_error = None;
-        let (today_start, today_end) = today_range();
 
-        match self
-            .db
-            .query_process_summaries(&today_start, &today_end, None)
-        {
-            Ok(v) => self.today_summaries = v,
+        let date_str = self.viewing_date.format("%Y-%m-%d").to_string();
+        let (day_start, day_end) = match date_range_for_day(&date_str) {
+            Some(r) => r,
+            None => {
+                self.last_error = Some(format!("invalid date: {}", date_str));
+                return;
+            }
+        };
+
+        match self.db.query_process_summaries(&day_start, &day_end, None) {
+            Ok(v) => self.summaries = v,
             Err(e) => {
                 self.last_error = Some(format!("query failed: {}", e));
                 return;
             }
         }
 
-        match self.db.query_sessions(&today_start, &today_end) {
-            Ok(v) => self.today_sessions = v,
+        match self.db.query_sessions(&day_start, &day_end) {
+            Ok(v) => self.sessions = v,
             Err(e) => {
                 self.last_error = Some(format!("query failed: {}", e));
                 return;
             }
         }
 
-        self.today_active = self
+        self.active_secs = self
             .db
-            .query_total_active_seconds(&today_start, &today_end)
+            .query_total_active_seconds(&day_start, &day_end)
             .unwrap_or(0);
 
-        self.today_idle = self
+        self.idle_secs = self
             .db
-            .query_total_idle_seconds(&today_start, &today_end)
+            .query_total_idle_seconds(&day_start, &day_end)
             .unwrap_or(0);
 
         self.daily_totals.clear();
         let today = chrono::Local::now().date_naive();
         let start_day = today - chrono::Duration::days(29);
         let (range_start, _) =
-            laches::db::date_range_for_day(&start_day.format("%Y-%m-%d").to_string())
-                .unwrap_or_default();
-        let (_, range_end) = laches::db::date_range_for_day(&today.format("%Y-%m-%d").to_string())
-            .unwrap_or_default();
+            date_range_for_day(&start_day.format("%Y-%m-%d").to_string()).unwrap_or_default();
+        let (_, range_end) =
+            date_range_for_day(&today.format("%Y-%m-%d").to_string()).unwrap_or_default();
 
         let db_totals: std::collections::HashMap<String, i64> =
             match self.db.query_daily_totals(&range_start, &range_end) {
@@ -137,13 +166,16 @@ impl<'a> App<'a> {
                 .push((date.format("%m/%d").to_string(), total));
         }
 
-        self.current_process = self
-            .db
-            .get_open_session()
-            .ok()
-            .flatten()
-            .filter(|s| !s.idle)
-            .map(|s| s.process_name);
+        self.current_process = if self.is_viewing_today() {
+            self.db
+                .get_open_session()
+                .ok()
+                .flatten()
+                .filter(|s| !s.idle)
+                .map(|s| s.process_name)
+        } else {
+            None
+        };
     }
 
     pub fn render(&self, frame: &mut Frame, theme: &Theme) {
@@ -156,7 +188,11 @@ impl<'a> App<'a> {
             ])
             .split(frame.area());
 
-        let date_str = chrono::Local::now().format("%a %b %d").to_string();
+        let date_str = if self.is_viewing_today() {
+            format!("today ({})", self.viewing_date.format("%a %b %d"))
+        } else {
+            self.viewing_date.format("%a %b %d, %Y").to_string()
+        };
         let title = format!(" lachesis \u{2500} {} ", date_str);
         let tabs = Tabs::new(TAB_TITLES.iter().map(|t| Line::from(*t)))
             .block(Block::default().borders(Borders::ALL).title(title))
@@ -188,6 +224,9 @@ impl<'a> App<'a> {
                 sep.clone(),
                 Span::styled("tab", theme.key_hint()),
                 Span::styled(" switch", theme.key_desc()),
+                sep.clone(),
+                Span::styled("h/l", theme.key_hint()),
+                Span::styled(" day", theme.key_desc()),
                 sep.clone(),
                 Span::styled("j/k", theme.key_hint()),
                 Span::styled(" scroll", theme.key_desc()),

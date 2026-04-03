@@ -17,15 +17,14 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
 
     render_header(app, frame, chunks[0], theme);
 
-    if app.today_summaries.is_empty() {
-        let empty =
-            Paragraph::new(" no tracked data for today. start the daemon with `laches start`.")
-                .style(theme.empty_text())
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title(" top processes "),
-                );
+    if app.summaries.is_empty() {
+        let empty = Paragraph::new(" no tracked data for this day.")
+            .style(theme.empty_text())
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" top processes "),
+            );
         frame.render_widget(empty, chunks[1]);
     } else {
         render_process_list(app, frame, chunks[1], theme);
@@ -35,11 +34,11 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
 }
 
 fn render_header(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
-    let active = laches::utils::format_duration_hm(app.today_active);
-    let idle = if app.today_idle > 0 {
+    let active = laches::utils::format_duration_hm(app.active_secs);
+    let idle = if app.idle_secs > 0 {
         format!(
             "  idle: {}",
-            laches::utils::format_duration_hm(app.today_idle)
+            laches::utils::format_duration_hm(app.idle_secs)
         )
     } else {
         String::new()
@@ -66,12 +65,12 @@ fn render_process_list(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) 
         return;
     }
 
-    let total_items = app.today_summaries.len();
+    let total_items = app.summaries.len();
     let scroll = app.scroll_offsets[0].min(total_items.saturating_sub(inner_height));
 
-    let total_secs: i64 = app.today_summaries.iter().map(|s| s.total_seconds).sum();
+    let total_secs: i64 = app.summaries.iter().map(|s| s.total_seconds).sum();
     let max_secs = app
-        .today_summaries
+        .summaries
         .iter()
         .map(|s| s.total_seconds)
         .max()
@@ -84,7 +83,7 @@ fn render_process_list(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) 
     let mut lines: Vec<Line> = Vec::with_capacity(inner_height);
 
     for (i, s) in app
-        .today_summaries
+        .summaries
         .iter()
         .skip(scroll)
         .take(inner_height)
@@ -150,13 +149,13 @@ fn render_process_list(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) 
 }
 
 fn render_footer(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
-    let total_secs: i64 = app.today_summaries.iter().map(|s| s.total_seconds).sum();
-    let session_count: i64 = app.today_summaries.iter().map(|s| s.session_count).sum();
+    let total_secs: i64 = app.summaries.iter().map(|s| s.total_seconds).sum();
+    let session_count: i64 = app.summaries.iter().map(|s| s.session_count).sum();
 
     let footer = Paragraph::new(Line::from(vec![Span::styled(
         format!(
             " {} processes  |  {} sessions  |  {} total",
-            app.today_summaries.len(),
+            app.summaries.len(),
             session_count,
             laches::utils::format_duration_hm(total_secs),
         ),

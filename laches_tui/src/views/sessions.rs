@@ -9,7 +9,7 @@ use ratatui::{
 };
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
-    let non_idle: Vec<_> = app.today_sessions.iter().filter(|s| !s.idle).collect();
+    let non_idle: Vec<_> = app.sessions.iter().filter(|s| !s.idle).collect();
 
     if non_idle.is_empty() {
         let empty =

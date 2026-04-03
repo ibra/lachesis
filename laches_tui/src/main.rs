@@ -88,6 +88,8 @@ fn run(
                     KeyCode::Char('4') => app.set_tab(3),
                     KeyCode::Tab => app.next_tab(),
                     KeyCode::BackTab => app.prev_tab(),
+                    KeyCode::Left | KeyCode::Char('h') => app.prev_day(),
+                    KeyCode::Right | KeyCode::Char('l') => app.next_day(),
                     KeyCode::Up | KeyCode::Char('k') => app.scroll_up(),
                     KeyCode::Down | KeyCode::Char('j') => app.scroll_down(),
                     KeyCode::Char('r') => app.refresh_data(),
