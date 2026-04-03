@@ -1,4 +1,5 @@
 use crate::db::{last_n_days_range, Database};
+use crate::utils::confirm;
 use std::error::Error;
 
 /// Parse a duration string like "7d" or "30d" into a number of days.
@@ -65,6 +66,10 @@ pub fn delete_sessions(
     }
 
     if all {
+        if !confirm("are you sure you want to delete all sessions? [y/N] ") {
+            println!("cancelled.");
+            return Ok(());
+        }
         let count = db.delete_all_sessions()?;
         println!("deleted {} sessions", count);
     } else if let Some(dur) = duration {
@@ -78,6 +83,10 @@ pub fn delete_sessions(
 
 /// Reset all data (sessions and tags).
 pub fn reset_data(db: &Database) -> Result<(), Box<dyn Error>> {
+    if !confirm("are you sure you want to reset all data? this cannot be undone. [y/N] ") {
+        println!("cancelled.");
+        return Ok(());
+    }
     db.reset()?;
     println!("all sessions and tags cleared.");
     Ok(())
