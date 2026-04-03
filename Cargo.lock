@@ -649,6 +649,7 @@ dependencies = [
 name = "laches_mon"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "ctrlc",
  "laches",
  "rusqlite",
