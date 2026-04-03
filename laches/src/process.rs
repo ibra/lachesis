@@ -1,7 +1,7 @@
 use crate::config::{clear_daemon_pid, read_daemon_pid, write_daemon_pid};
 use std::env;
 use std::process::Stdio;
-use std::{error::Error, path::Path, process::Command};
+use std::{error::Error, path::Path, process::Command, thread, time::Duration};
 use sysinfo::{Pid, ProcessRefreshKind, System, UpdateKind};
 
 /// Check if a process with the given PID is running and is laches_mon.
@@ -33,7 +33,7 @@ pub fn start_monitoring(config_dir: &Path) -> Result<(), Box<dyn Error>> {
     exe_path.pop();
     exe_path.push("laches_mon");
 
-    let instance = Command::new(&exe_path)
+    let mut child = Command::new(&exe_path)
         .arg(config_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -47,9 +47,25 @@ pub fn start_monitoring(config_dir: &Path) -> Result<(), Box<dyn Error>> {
             )
         })?;
 
-    let pid = instance.id();
+    let pid = child.id();
+
+    thread::sleep(Duration::from_millis(500));
+    match child.try_wait() {
+        Ok(Some(status)) => {
+            return Err(format!(
+                "error: laches_mon exited immediately (status: {}). check daemon.log for details",
+                status
+            )
+            .into());
+        }
+        Ok(None) => {}
+        Err(e) => {
+            return Err(format!("error: failed to check daemon status: {}", e).into());
+        }
+    }
+
     write_daemon_pid(config_dir, pid)?;
-    drop(instance);
+    drop(child);
 
     println!("info: started laches_mon daemon (pid: {})", pid);
 
