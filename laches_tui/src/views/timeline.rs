@@ -29,9 +29,10 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let sessions: Vec<_> = app.today_sessions.iter().filter(|s| !s.idle).collect();
 
     if sessions.is_empty() {
-        let empty = Paragraph::new(" no sessions today.")
-            .style(Style::default().fg(Color::DarkGray))
-            .block(Block::default().borders(Borders::ALL).title(" timeline "));
+        let empty =
+            Paragraph::new(" no sessions recorded today. start the daemon with `laches start`.")
+                .style(Style::default().fg(Color::DarkGray))
+                .block(Block::default().borders(Borders::ALL).title(" timeline "));
         frame.render_widget(empty, area);
         return;
     }
@@ -85,7 +86,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     };
     let inner_w = area.width.saturating_sub(2) as usize;
     let items_per_row = legend_items_per_row(inner_w);
-    let legend_rows = ((color_map.len() + items_per_row - 1) / items_per_row).max(1);
+    let legend_rows = color_map.len().div_ceil(items_per_row).max(1);
     let legend_height = (legend_rows as u16 + 2).min(area.height.saturating_sub(5)); // +2 for borders
 
     let chunks = Layout::default()
@@ -120,9 +121,9 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         let start_col = start_col.min(inner_width);
         let end_col = end_col.min(inner_width);
 
-        for col in start_col..end_col {
-            if col_colors[col].is_none() {
-                col_colors[col] = Some(color);
+        for slot in col_colors.iter_mut().take(end_col).skip(start_col) {
+            if slot.is_none() {
+                *slot = Some(color);
             }
         }
     }

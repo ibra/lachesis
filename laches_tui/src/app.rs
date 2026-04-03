@@ -135,11 +135,18 @@ impl<'a> App<'a> {
             ])
             .split(frame.area());
 
-        // tab bar
+        // tab bar with date in title
+        let date_str = chrono::Local::now().format("%a %b %d").to_string();
+        let title = format!(" lachesis \u{2500} {} ", date_str);
         let tabs = Tabs::new(TAB_TITLES.iter().map(|t| Line::from(*t)))
-            .block(Block::default().borders(Borders::ALL).title(" lachesis "))
+            .block(Block::default().borders(Borders::ALL).title(title))
             .select(self.tab)
-            .highlight_style(Style::default().fg(Color::Cyan).bold());
+            .style(Style::default().fg(Color::DarkGray))
+            .highlight_style(Style::default().fg(Color::Cyan).bold())
+            .divider(Span::styled(
+                " \u{2502} ",
+                Style::default().fg(Color::DarkGray),
+            ));
         frame.render_widget(tabs, chunks[0]);
 
         // active view
@@ -151,16 +158,23 @@ impl<'a> App<'a> {
             _ => {}
         }
 
-        // footer
+        // footer with structured key hints and time
+        let sep = Span::styled(" \u{2502} ", Style::default().fg(Color::DarkGray));
+        let time_str = chrono::Local::now().format("%H:%M").to_string();
         let footer = Line::from(vec![
-            Span::raw(" q"),
-            Span::styled(" quit  ", Style::default().fg(Color::DarkGray)),
-            Span::raw("tab"),
-            Span::styled(" switch  ", Style::default().fg(Color::DarkGray)),
-            Span::raw("j/k"),
-            Span::styled(" scroll  ", Style::default().fg(Color::DarkGray)),
-            Span::raw("r"),
+            Span::styled(" q", Style::default().bold()),
+            Span::styled(" quit", Style::default().fg(Color::DarkGray)),
+            sep.clone(),
+            Span::styled("tab", Style::default().bold()),
+            Span::styled(" switch", Style::default().fg(Color::DarkGray)),
+            sep.clone(),
+            Span::styled("j/k", Style::default().bold()),
+            Span::styled(" scroll", Style::default().fg(Color::DarkGray)),
+            sep.clone(),
+            Span::styled("r", Style::default().bold()),
             Span::styled(" refresh", Style::default().fg(Color::DarkGray)),
+            sep,
+            Span::styled(time_str, Style::default().fg(Color::DarkGray)),
         ]);
         frame.render_widget(footer, chunks[2]);
     }
