@@ -198,13 +198,26 @@ pub fn get_hostname() -> String {
 }
 
 /// Get a stable machine identifier. Generated once, stored in .machine_id.
+/// If the file exists but is empty/corrupted, logs a warning and generates
+/// a new ID. If the file doesn't exist, creates one.
 pub fn get_machine_id(config_dir: &Path) -> String {
     let machine_id_file = config_dir.join(".machine_id");
 
-    if let Ok(existing_id) = std::fs::read_to_string(&machine_id_file) {
-        let trimmed = existing_id.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
+    if machine_id_file.exists() {
+        match std::fs::read_to_string(&machine_id_file) {
+            Ok(content) => {
+                let trimmed = content.trim();
+                if !trimmed.is_empty() {
+                    return trimmed.to_string();
+                }
+                eprintln!("warning: machine id file exists but is empty, generating new id");
+            }
+            Err(e) => {
+                eprintln!(
+                    "warning: failed to read machine id file: {}. generating new id",
+                    e
+                );
+            }
         }
     }
 

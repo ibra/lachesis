@@ -2,21 +2,25 @@ use crate::config::{clear_daemon_pid, read_daemon_pid, write_daemon_pid};
 use std::env;
 use std::process::Stdio;
 use std::{error::Error, path::Path, process::Command};
-use sysinfo::{Pid, System};
+use sysinfo::{Pid, ProcessRefreshKind, System, UpdateKind};
 
-fn is_daemon_running(pid: u32) -> bool {
-    let s = System::new_all();
-    if let Some(process) = s.process(Pid::from(pid as usize)) {
-        let name = process.name().to_string();
-        name.contains("laches_mon")
-    } else {
-        false
-    }
+/// Check if a process with the given PID is running and is laches_mon.
+/// Uses a targeted process refresh instead of scanning all processes.
+fn find_daemon_process(sys: &mut System, pid: u32) -> bool {
+    let sysinfo_pid = Pid::from(pid as usize);
+    sys.refresh_process_specifics(
+        sysinfo_pid,
+        ProcessRefreshKind::new().with_cmd(UpdateKind::OnlyIfNotSet),
+    );
+    sys.process(sysinfo_pid)
+        .map(|p| p.name().contains("laches_mon"))
+        .unwrap_or(false)
 }
 
 pub fn start_monitoring(config_dir: &Path) -> Result<(), Box<dyn Error>> {
     if let Some(pid) = read_daemon_pid(config_dir) {
-        if is_daemon_running(pid) {
+        let mut sys = System::new();
+        if find_daemon_process(&mut sys, pid) {
             return Err(format!(
                 "error: laches_mon is already running (pid: {}). stop it first with `laches stop`",
                 pid
@@ -52,22 +56,39 @@ pub fn start_monitoring(config_dir: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Stop the monitoring daemon. Uses a single process lookup to avoid
+/// TOCTOU races between checking and killing.
 pub fn stop_monitoring(config_dir: &Path) -> Result<(), Box<dyn Error>> {
     let pid = match read_daemon_pid(config_dir) {
-        Some(pid) if is_daemon_running(pid) => pid,
-        _ => {
+        Some(pid) => pid,
+        None => {
             println!("info: laches_mon is not running");
-            clear_daemon_pid(config_dir);
             return Ok(());
         }
     };
 
-    let s = System::new_all();
-    if let Some(process) = s.process(Pid::from(pid as usize)) {
-        process.kill();
+    let mut sys = System::new();
+    let sysinfo_pid = Pid::from(pid as usize);
+    sys.refresh_process_specifics(
+        sysinfo_pid,
+        ProcessRefreshKind::new().with_cmd(UpdateKind::OnlyIfNotSet),
+    );
+
+    if let Some(process) = sys.process(sysinfo_pid) {
+        if process.name().contains("laches_mon") {
+            process.kill();
+            clear_daemon_pid(config_dir);
+            println!("info: stopped laches_mon (pid: {})", pid);
+        } else {
+            // PID exists but isn't laches_mon — stale pid file
+            clear_daemon_pid(config_dir);
+            println!("info: laches_mon is not running (stale pid file)");
+        }
+    } else {
+        // process doesn't exist at all
+        clear_daemon_pid(config_dir);
+        println!("info: laches_mon is not running");
     }
-    clear_daemon_pid(config_dir);
-    println!("info: stopped laches_mon (pid: {})", pid);
 
     Ok(())
 }

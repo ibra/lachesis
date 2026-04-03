@@ -1,7 +1,8 @@
+use crate::cli::AutostartToggle;
 use auto_launch::AutoLaunch;
 use std::{error::Error, path::Path};
 
-pub fn handle_autostart(toggle: &str, config_dir: &Path) -> Result<(), Box<dyn Error>> {
+pub fn handle_autostart(toggle: &AutostartToggle, config_dir: &Path) -> Result<(), Box<dyn Error>> {
     let laches_mon_path = if cfg!(windows) {
         std::env::current_exe()?
             .parent()
@@ -41,7 +42,7 @@ pub fn handle_autostart(toggle: &str, config_dir: &Path) -> Result<(), Box<dyn E
     );
 
     match toggle {
-        "yes" => {
+        AutostartToggle::On => {
             if auto.is_enabled()? {
                 println!("info: autostart is already enabled.");
             } else {
@@ -49,16 +50,13 @@ pub fn handle_autostart(toggle: &str, config_dir: &Path) -> Result<(), Box<dyn E
                 println!("info: enabled laches_mon to run at startup.");
             }
         }
-        "no" => {
+        AutostartToggle::Off => {
             if !auto.is_enabled()? {
                 println!("info: autostart is already disabled.");
             } else {
                 auto.disable()?;
                 println!("info: disabled laches_mon from running at startup.");
             }
-        }
-        _ => {
-            return Err("error: invalid option for autostart. use 'yes' or 'no'.".into());
         }
     }
 

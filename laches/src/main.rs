@@ -1,6 +1,6 @@
 use clap::Parser;
 use laches::{
-    cli::{AutostartToggle, Cli, Commands, ConfigAction, DataAction},
+    cli::{Cli, Commands, ConfigAction, DataAction},
     commands::{
         autostart::handle_autostart,
         data,
@@ -117,13 +117,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Ok(())
         }
 
-        Commands::Autostart { toggle } => {
-            let toggle_str = match toggle {
-                AutostartToggle::On => "yes",
-                AutostartToggle::Off => "no",
-            };
-            handle_autostart(toggle_str, &config_dir)
-        }
+        Commands::Autostart { toggle } => handle_autostart(toggle, &config_dir),
 
         Commands::Config { action } => match action {
             Some(ConfigAction::StorePath { path: _ }) => {
