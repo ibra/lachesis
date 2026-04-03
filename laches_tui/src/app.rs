@@ -3,6 +3,7 @@ use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Tabs},
 };
+use std::path::PathBuf;
 
 use crate::theme::Theme;
 use crate::views;
@@ -12,6 +13,7 @@ const TAB_COUNT: usize = TAB_TITLES.len();
 
 pub struct App<'a> {
     pub db: &'a Database,
+    pub config_dir: PathBuf,
     pub tab: usize,
     pub viewing_date: chrono::NaiveDate,
 
@@ -23,13 +25,15 @@ pub struct App<'a> {
     pub idle_secs: i64,
     pub daily_totals: Vec<(String, i64)>,
     pub current_process: Option<String>,
+    pub daemon_running: bool,
     pub last_error: Option<String>,
 }
 
 impl<'a> App<'a> {
-    pub fn new(db: &'a Database) -> Self {
+    pub fn new(db: &'a Database, config_dir: PathBuf) -> Self {
         Self {
             db,
+            config_dir,
             tab: 0,
             viewing_date: chrono::Local::now().date_naive(),
             scroll_offsets: [0; TAB_COUNT],
@@ -39,6 +43,7 @@ impl<'a> App<'a> {
             idle_secs: 0,
             daily_totals: Vec::new(),
             current_process: None,
+            daemon_running: false,
             last_error: None,
         }
     }
@@ -176,6 +181,8 @@ impl<'a> App<'a> {
         } else {
             None
         };
+
+        self.daemon_running = laches::process::is_daemon_running(&self.config_dir);
     }
 
     pub fn render(&self, frame: &mut Frame, theme: &Theme) {

@@ -43,18 +43,29 @@ fn render_header(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     } else {
         String::new()
     };
-    let tracking = app
-        .current_process
-        .as_ref()
-        .map(|p| format!("  |  tracking: {}", p))
-        .unwrap_or_default();
+    let status = if let Some(ref p) = app.current_process {
+        Span::styled(
+            format!("  |  \u{25cf} tracking: {}", p),
+            theme.header_tracking(),
+        )
+    } else if app.daemon_running {
+        Span::styled("  |  \u{25cf} daemon idle", theme.key_desc())
+    } else {
+        Span::styled("  |  \u{25cb} daemon stopped", theme.error_text())
+    };
+
+    let title = if app.is_viewing_today() {
+        " today ".to_string()
+    } else {
+        format!(" {} ", app.viewing_date.format("%Y-%m-%d"))
+    };
 
     let header = Paragraph::new(Line::from(vec![
         Span::styled(format!(" active: {}", active), theme.header_active()),
         Span::styled(idle, theme.key_desc()),
-        Span::styled(tracking, theme.header_tracking()),
+        status,
     ]))
-    .block(Block::default().borders(Borders::ALL).title(" today "));
+    .block(Block::default().borders(Borders::ALL).title(title));
     frame.render_widget(header, area);
 }
 

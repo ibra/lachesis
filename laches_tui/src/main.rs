@@ -52,7 +52,7 @@ fn main() -> io::Result<()> {
     }));
 
     let theme = Theme::default();
-    let mut app = App::new(&db);
+    let mut app = App::new(&db, config_dir);
     let result = run(&mut terminal, &mut app, &theme);
 
     // restore terminal
