@@ -12,7 +12,7 @@ lachesis is a cli-based, customizable, automatic time tracking tool for monitori
 - **time range queries**: view usage by today, week, month, specific date, or arbitrary date range.
 - **data export**: export tracked sessions to json, optionally filtered by duration.
 - **per-machine sync**: each machine writes its own sqlite database. sync the `data/` directory with syncthing or dropbox with zero conflicts.
-- **tui dashboard**: interactive terminal dashboard with today view, timeline, trends, and session list (`laches_tui`).
+- **tui dashboard**: interactive terminal dashboard with today view, timeline, trends, and session list. supports date navigation, live window title display, tag grouping, and a help overlay (`laches_tui`).
 - **cross-platform**: windows (full support), linux and macos (stubs, contributions welcome).
 
 ## usage
@@ -46,7 +46,19 @@ laches list --verbose              # extra columns (active days, avg, sessions)
 laches_tui                         # launch the interactive terminal dashboard
 ```
 
-navigate with `1`-`4` or `tab` to switch views, `j`/`k` to scroll, `q` to quit.
+keybindings:
+
+| key | action |
+|-----|--------|
+| `1`-`4` / `tab` | switch views |
+| `h`/`l` or arrows | navigate between days |
+| `j`/`k` | scroll |
+| `g` | toggle tag grouping in today view |
+| `r` | refresh data |
+| `?` | show help overlay |
+| `q` / `esc` | quit |
+
+the header shows the live focused window title and daemon status (tracking, idle, or stopped). when viewing past days, the timeline and sessions update to show that day's data.
 
 ### tagging
 

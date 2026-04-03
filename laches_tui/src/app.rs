@@ -1,15 +1,13 @@
 use laches::db::{date_range_for_day, Database, ProcessSummary, Session};
-use ratatui::{
-    prelude::*,
-    widgets::{Block, Borders, Tabs},
-};
 use std::path::PathBuf;
 
-use crate::theme::Theme;
-use crate::views;
+const TAB_COUNT: usize = 4;
 
-const TAB_TITLES: [&str; 4] = ["today", "timeline", "trends", "sessions"];
-const TAB_COUNT: usize = TAB_TITLES.len();
+pub struct TagGroup {
+    pub tag: String,
+    pub total_seconds: i64,
+    pub processes: Vec<String>,
+}
 
 pub struct App<'a> {
     pub db: &'a Database,
@@ -25,7 +23,11 @@ pub struct App<'a> {
     pub idle_secs: i64,
     pub daily_totals: Vec<(String, i64)>,
     pub current_process: Option<String>,
+    pub current_window_title: Option<String>,
     pub daemon_running: bool,
+    pub show_help: bool,
+    pub group_by_tag: bool,
+    pub tag_groups: Vec<TagGroup>,
     pub last_error: Option<String>,
 }
 
@@ -43,7 +45,11 @@ impl<'a> App<'a> {
             idle_secs: 0,
             daily_totals: Vec::new(),
             current_process: None,
+            current_window_title: None,
             daemon_running: false,
+            show_help: false,
+            group_by_tag: false,
+            tag_groups: Vec::new(),
             last_error: None,
         }
     }
@@ -89,6 +95,16 @@ impl<'a> App<'a> {
         }
     }
 
+    pub fn toggle_help(&mut self) {
+        self.show_help = !self.show_help;
+    }
+
+    pub fn toggle_group_by_tag(&mut self) {
+        self.group_by_tag = !self.group_by_tag;
+        self.scroll_offsets[0] = 0;
+        self.rebuild_tag_groups();
+    }
+
     pub fn scroll_up(&mut self) {
         self.scroll_offsets[self.tab] = self.scroll_offsets[self.tab].saturating_sub(1);
     }
@@ -102,7 +118,13 @@ impl<'a> App<'a> {
 
     fn scrollable_item_count(&self, tab: usize) -> usize {
         match tab {
-            0 => self.summaries.len(),
+            0 => {
+                if self.group_by_tag {
+                    self.tag_groups.len()
+                } else {
+                    self.summaries.len()
+                }
+            }
             3 => self.sessions.iter().filter(|s| !s.idle).count(),
             _ => 0,
         }
@@ -171,79 +193,87 @@ impl<'a> App<'a> {
                 .push((date.format("%m/%d").to_string(), total));
         }
 
-        self.current_process = if self.is_viewing_today() {
-            self.db
+        if self.is_viewing_today() {
+            let open = self
+                .db
                 .get_open_session()
                 .ok()
                 .flatten()
-                .filter(|s| !s.idle)
-                .map(|s| s.process_name)
+                .filter(|s| !s.idle);
+            self.current_process = open.map(|s| s.process_name);
+
+            let tracker = laches::platform::create_tracker();
+            if let Some(info) = tracker.get_focused_window() {
+                self.current_window_title = info.window_title;
+            } else {
+                self.current_window_title = None;
+            }
         } else {
-            None
-        };
-
-        self.daemon_running = laches::process::is_daemon_running(&self.config_dir);
-    }
-
-    pub fn render(&self, frame: &mut Frame, theme: &Theme) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),
-                Constraint::Min(0),
-                Constraint::Length(1),
-            ])
-            .split(frame.area());
-
-        let date_str = if self.is_viewing_today() {
-            format!("today ({})", self.viewing_date.format("%a %b %d"))
-        } else {
-            self.viewing_date.format("%a %b %d, %Y").to_string()
-        };
-        let title = format!(" lachesis \u{2500} {} ", date_str);
-        let tabs = Tabs::new(TAB_TITLES.iter().map(|t| Line::from(*t)))
-            .block(Block::default().borders(Borders::ALL).title(title))
-            .select(self.tab)
-            .style(theme.tab_inactive())
-            .highlight_style(theme.tab_active())
-            .divider(theme.separator());
-        frame.render_widget(tabs, chunks[0]);
-
-        match self.tab {
-            0 => views::today::render(self, frame, chunks[1], theme),
-            1 => views::timeline::render(self, frame, chunks[1], theme),
-            2 => views::trends::render(self, frame, chunks[1], theme),
-            3 => views::sessions::render(self, frame, chunks[1], theme),
-            _ => {}
+            self.current_process = None;
+            self.current_window_title = None;
         }
 
-        let footer = if let Some(ref err) = self.last_error {
-            Line::from(vec![
-                Span::styled(" ERROR ", theme.error_label()),
-                Span::styled(err.as_str(), theme.error_text()),
-            ])
-        } else {
-            let sep = theme.separator();
-            let time_str = chrono::Local::now().format("%H:%M").to_string();
-            Line::from(vec![
-                Span::styled(" q", theme.key_hint()),
-                Span::styled(" quit", theme.key_desc()),
-                sep.clone(),
-                Span::styled("tab", theme.key_hint()),
-                Span::styled(" switch", theme.key_desc()),
-                sep.clone(),
-                Span::styled("h/l", theme.key_hint()),
-                Span::styled(" day", theme.key_desc()),
-                sep.clone(),
-                Span::styled("j/k", theme.key_hint()),
-                Span::styled(" scroll", theme.key_desc()),
-                sep.clone(),
-                Span::styled("r", theme.key_hint()),
-                Span::styled(" refresh", theme.key_desc()),
-                sep,
-                Span::styled(time_str, theme.key_desc()),
-            ])
-        };
-        frame.render_widget(footer, chunks[2]);
+        self.daemon_running = laches::process::is_daemon_running(&self.config_dir);
+        self.rebuild_tag_groups();
+    }
+
+    fn rebuild_tag_groups(&mut self) {
+        self.tag_groups.clear();
+        if !self.group_by_tag {
+            return;
+        }
+
+        let all_tags = self.db.get_all_tags().unwrap_or_default();
+
+        let mut tag_map: std::collections::HashMap<String, (i64, Vec<String>)> =
+            std::collections::HashMap::new();
+
+        let mut tagged_processes: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+
+        for (process_name, tag) in &all_tags {
+            tagged_processes.insert(process_name.clone());
+            if let Some(s) = self
+                .summaries
+                .iter()
+                .find(|s| &s.process_name == process_name)
+            {
+                let entry = tag_map.entry(tag.clone()).or_insert((0, Vec::new()));
+                entry.0 += s.total_seconds;
+                if !entry.1.contains(&s.process_name) {
+                    entry.1.push(s.process_name.clone());
+                }
+            }
+        }
+
+        let mut untagged_secs: i64 = 0;
+        let mut untagged_procs: Vec<String> = Vec::new();
+        for s in &self.summaries {
+            if !tagged_processes.contains(&s.process_name) {
+                untagged_secs += s.total_seconds;
+                untagged_procs.push(s.process_name.clone());
+            }
+        }
+
+        let mut groups: Vec<TagGroup> = tag_map
+            .into_iter()
+            .map(|(tag, (total, procs))| TagGroup {
+                tag,
+                total_seconds: total,
+                processes: procs,
+            })
+            .collect();
+
+        groups.sort_by(|a, b| b.total_seconds.cmp(&a.total_seconds));
+
+        if !untagged_procs.is_empty() {
+            groups.push(TagGroup {
+                tag: "untagged".to_string(),
+                total_seconds: untagged_secs,
+                processes: untagged_procs,
+            });
+        }
+
+        self.tag_groups = groups;
     }
 }

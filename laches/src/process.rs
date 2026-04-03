@@ -1,7 +1,8 @@
 use crate::config::{clear_daemon_pid, read_daemon_pid, write_daemon_pid};
+use crate::error::LachesError;
 use std::env;
 use std::process::Stdio;
-use std::{error::Error, path::Path, process::Command, thread, time::Duration};
+use std::{path::Path, process::Command, thread, time::Duration};
 use sysinfo::{Pid, ProcessRefreshKind, System, UpdateKind};
 
 /// Check if a process with the given PID is running and is laches_mon.
@@ -27,7 +28,7 @@ pub fn is_daemon_running(config_dir: &Path) -> bool {
     }
 }
 
-pub fn start_monitoring(config_dir: &Path) -> Result<(), Box<dyn Error>> {
+pub fn start_monitoring(config_dir: &Path) -> Result<(), LachesError> {
     if let Some(pid) = read_daemon_pid(config_dir) {
         let mut sys = System::new();
         if find_daemon_process(&mut sys, pid) {
@@ -84,7 +85,7 @@ pub fn start_monitoring(config_dir: &Path) -> Result<(), Box<dyn Error>> {
 
 /// Stop the monitoring daemon. Uses a single process lookup to avoid
 /// TOCTOU races between checking and killing.
-pub fn stop_monitoring(config_dir: &Path) -> Result<(), Box<dyn Error>> {
+pub fn stop_monitoring(config_dir: &Path) -> Result<(), LachesError> {
     let pid = match read_daemon_pid(config_dir) {
         Some(pid) => pid,
         None => {

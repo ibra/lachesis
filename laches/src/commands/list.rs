@@ -167,14 +167,9 @@ pub fn print_sessions(
             .unwrap_or("now");
 
         let duration = if let Some(ref et) = s.end_time {
-            let st =
-                chrono::NaiveDateTime::parse_from_str(&s.start_time, crate::db::TIMESTAMP_FORMAT);
-            let en = chrono::NaiveDateTime::parse_from_str(et, crate::db::TIMESTAMP_FORMAT);
-            if let (Ok(st), Ok(en)) = (st, en) {
-                let secs = (en - st).num_seconds().max(0) as u64;
-                format_uptime(secs)
-            } else {
-                "?".to_string()
+            match crate::utils::session_duration_secs(&s.start_time, et) {
+                Some(secs) => format_uptime(secs as u64),
+                None => "?".to_string(),
             }
         } else {
             "active".to_string()

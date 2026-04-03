@@ -31,8 +31,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let db = Database::open(&db_path)?;
 
     match &cli.command {
-        Commands::Start => start_monitoring(&config_dir),
-        Commands::Stop => stop_monitoring(&config_dir),
+        Commands::Start => Ok(start_monitoring(&config_dir)?),
+        Commands::Stop => Ok(stop_monitoring(&config_dir)?),
 
         Commands::List {
             tag,
