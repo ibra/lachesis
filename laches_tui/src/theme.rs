@@ -5,7 +5,6 @@ pub struct Theme {
     pub success: Color,
     pub error: Color,
     pub muted: Color,
-    pub text: Color,
     pub bar_filled: Color,
     pub bar_empty: Color,
     pub palette: [Color; 8],
@@ -18,7 +17,6 @@ impl Default for Theme {
             success: Color::Green,
             error: Color::Red,
             muted: Color::DarkGray,
-            text: Color::White,
             bar_filled: Color::Cyan,
             bar_empty: Color::DarkGray,
             palette: [
@@ -78,10 +76,6 @@ impl Theme {
 
     pub fn active_row(&self) -> Style {
         Style::default().fg(self.success).bold()
-    }
-
-    pub fn bar_value(&self) -> Style {
-        Style::default().fg(self.text).add_modifier(Modifier::BOLD)
     }
 
     pub fn empty_text(&self) -> Style {

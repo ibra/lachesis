@@ -350,6 +350,14 @@ impl Database {
         rows.collect()
     }
 
+    pub fn get_earliest_session_date(&self) -> SqlResult<Option<String>> {
+        self.conn.query_row(
+            "SELECT date(MIN(start_time)) FROM sessions WHERE idle = 0",
+            [],
+            |row| row.get(0),
+        )
+    }
+
     pub fn get_tracked_processes(&self) -> SqlResult<Vec<String>> {
         let mut stmt = self
             .conn

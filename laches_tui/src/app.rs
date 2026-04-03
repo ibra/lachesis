@@ -1,7 +1,18 @@
-use laches::db::{date_range_for_day, Database, ProcessSummary, Session};
+use laches::db::{date_range_for_day, last_n_days_range, Database, ProcessSummary, Session};
 use std::path::PathBuf;
 
 const TAB_COUNT: usize = 4;
+
+pub struct Insights {
+    pub yesterday_secs: i64,
+    pub week_secs: i64,
+    pub last_week_secs: i64,
+    pub avg_7d: i64,
+    pub avg_30d: i64,
+    pub streak: u32,
+    pub top_week_process: Option<String>,
+    pub top_week_secs: i64,
+}
 
 pub struct TagGroup {
     pub tag: String,
@@ -14,6 +25,7 @@ pub struct App<'a> {
     pub config_dir: PathBuf,
     pub tab: usize,
     pub viewing_date: chrono::NaiveDate,
+    pub earliest_date: Option<chrono::NaiveDate>,
 
     pub scroll_offsets: [usize; TAB_COUNT],
 
@@ -21,7 +33,7 @@ pub struct App<'a> {
     pub sessions: Vec<Session>,
     pub active_secs: i64,
     pub idle_secs: i64,
-    pub daily_totals: Vec<(String, i64)>,
+    pub insights: Insights,
     pub current_process: Option<String>,
     pub current_window_title: Option<String>,
     pub daemon_running: bool,
@@ -38,12 +50,22 @@ impl<'a> App<'a> {
             config_dir,
             tab: 0,
             viewing_date: chrono::Local::now().date_naive(),
+            earliest_date: None,
             scroll_offsets: [0; TAB_COUNT],
             summaries: Vec::new(),
             sessions: Vec::new(),
             active_secs: 0,
             idle_secs: 0,
-            daily_totals: Vec::new(),
+            insights: Insights {
+                yesterday_secs: 0,
+                week_secs: 0,
+                last_week_secs: 0,
+                avg_7d: 0,
+                avg_30d: 0,
+                streak: 0,
+                top_week_process: None,
+                top_week_secs: 0,
+            },
             current_process: None,
             current_window_title: None,
             daemon_running: false,
@@ -78,6 +100,11 @@ impl<'a> App<'a> {
 
     pub fn prev_day(&mut self) {
         if let Some(d) = self.viewing_date.pred_opt() {
+            if let Some(earliest) = self.earliest_date {
+                if d < earliest {
+                    return;
+                }
+            }
             self.viewing_date = d;
             self.scroll_offsets = [0; TAB_COUNT];
             self.refresh_data();
@@ -168,7 +195,6 @@ impl<'a> App<'a> {
             .query_total_idle_seconds(&day_start, &day_end)
             .unwrap_or(0);
 
-        self.daily_totals.clear();
         let today = chrono::Local::now().date_naive();
         let start_day = today - chrono::Duration::days(29);
         let (range_start, _) =
@@ -185,13 +211,7 @@ impl<'a> App<'a> {
                 }
             };
 
-        for i in (0..30).rev() {
-            let date = today - chrono::Duration::days(i);
-            let date_key = date.format("%Y-%m-%d").to_string();
-            let total = db_totals.get(&date_key).copied().unwrap_or(0);
-            self.daily_totals
-                .push((date.format("%m/%d").to_string(), total));
-        }
+        self.compute_insights(&db_totals);
 
         if self.is_viewing_today() {
             let open = self
@@ -214,7 +234,76 @@ impl<'a> App<'a> {
         }
 
         self.daemon_running = laches::process::is_daemon_running(&self.config_dir);
+
+        if self.earliest_date.is_none() {
+            self.earliest_date = self
+                .db
+                .get_earliest_session_date()
+                .ok()
+                .flatten()
+                .and_then(|s| chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok());
+        }
+
         self.rebuild_tag_groups();
+    }
+
+    fn compute_insights(&mut self, daily_map: &std::collections::HashMap<String, i64>) {
+        let vd = self.viewing_date;
+
+        let prev = vd.pred_opt().unwrap_or(vd);
+        let prev_key = prev.format("%Y-%m-%d").to_string();
+        self.insights.yesterday_secs = daily_map.get(&prev_key).copied().unwrap_or_else(|| {
+            let (s, e) = date_range_for_day(&prev_key).unwrap_or_default();
+            self.db.query_total_active_seconds(&s, &e).unwrap_or(0)
+        });
+
+        let (w7s, w7e) = last_n_days_range(7);
+        let week_total = self.db.query_total_active_seconds(&w7s, &w7e).unwrap_or(0);
+        self.insights.week_secs = week_total;
+        self.insights.avg_7d = week_total / 7;
+
+        let (w14s, _) = last_n_days_range(14);
+        let two_week_total = self.db.query_total_active_seconds(&w14s, &w7s).unwrap_or(0);
+        self.insights.last_week_secs = two_week_total;
+
+        let (m30s, m30e) = last_n_days_range(30);
+        let month_total = self
+            .db
+            .query_total_active_seconds(&m30s, &m30e)
+            .unwrap_or(0);
+        self.insights.avg_30d = month_total / 30;
+
+        let mut streak: u32 = 0;
+        let mut check = vd;
+        loop {
+            let key = check.format("%Y-%m-%d").to_string();
+            let has_data = daily_map.get(&key).copied().unwrap_or_else(|| {
+                let (s, e) = date_range_for_day(&key).unwrap_or_default();
+                self.db.query_total_active_seconds(&s, &e).unwrap_or(0)
+            });
+            if has_data > 0 {
+                streak += 1;
+            } else {
+                break;
+            }
+            match check.pred_opt() {
+                Some(d) => check = d,
+                None => break,
+            }
+        }
+        self.insights.streak = streak;
+
+        let week_summaries = self
+            .db
+            .query_process_summaries(&w7s, &w7e, None)
+            .unwrap_or_default();
+        if let Some(top) = week_summaries.first() {
+            self.insights.top_week_process = Some(top.process_name.clone());
+            self.insights.top_week_secs = top.total_seconds;
+        } else {
+            self.insights.top_week_process = None;
+            self.insights.top_week_secs = 0;
+        }
     }
 
     fn rebuild_tag_groups(&mut self) {
