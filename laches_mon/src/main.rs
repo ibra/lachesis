@@ -1,8 +1,7 @@
 use laches::{
-    config::load_or_create_config,
+    config::{get_machine_id, load_or_create_config},
     db::Database,
     platform::{create_tracker, FocusInfo},
-    store::get_machine_id,
 };
 use std::{
     env,

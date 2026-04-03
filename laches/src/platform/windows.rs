@@ -1,5 +1,4 @@
-use super::{FocusInfo, FocusTracker};
-use crate::store::normalize_process_name;
+use super::{normalize_process_name, FocusInfo, FocusTracker};
 use std::time::Duration;
 use windows::core::PWSTR;
 use windows::Win32::Foundation::{CloseHandle, HWND, MAX_PATH};
@@ -60,7 +59,7 @@ impl FocusTracker for WindowsFocusTracker {
             let process_name = exe_path
                 .as_ref()
                 .and_then(|p| p.rsplit('\\').next())
-                .map(|name| normalize_process_name(name))
+                .map(normalize_process_name)
                 .unwrap_or_default();
 
             if process_name.is_empty() {

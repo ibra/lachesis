@@ -1,8 +1,7 @@
 use laches::{
-    config::{load_or_create_config, machine_db_path},
+    config::{get_machine_id, load_or_create_config, machine_db_path},
     db::Database,
     platform::create_tracker,
-    store::get_machine_id,
 };
 use tempfile::TempDir;
 

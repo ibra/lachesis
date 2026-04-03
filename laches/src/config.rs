@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs;
 use std::path::Path;
+use uuid::Uuid;
 
 const CONFIG_NAME: &str = "config.toml";
 const PID_FILE: &str = ".daemon_pid";
@@ -92,6 +93,53 @@ pub fn write_daemon_pid(config_dir: &Path, pid: u32) -> Result<(), Box<dyn Error
 pub fn clear_daemon_pid(config_dir: &Path) {
     let pid_path = config_dir.join(PID_FILE);
     let _ = fs::remove_file(&pid_path);
+}
+
+/// Get the hostname of the current machine.
+pub fn get_hostname() -> String {
+    if let Ok(hostname) = std::env::var("COMPUTERNAME") {
+        return hostname;
+    }
+    if let Ok(hostname) = std::env::var("HOSTNAME") {
+        return hostname;
+    }
+
+    #[cfg(unix)]
+    {
+        if let Ok(hostname) = std::fs::read_to_string("/etc/hostname") {
+            let trimmed = hostname.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+    }
+
+    "unknown".to_string()
+}
+
+/// Get a stable machine identifier. Generated once, stored in .machine_id.
+pub fn get_machine_id(config_dir: &Path) -> String {
+    let machine_id_file = config_dir.join(".machine_id");
+
+    if let Ok(existing_id) = std::fs::read_to_string(&machine_id_file) {
+        let trimmed = existing_id.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    let hostname = get_hostname();
+    let uuid = Uuid::new_v4();
+    let machine_id = format!("{}_{}", hostname, uuid);
+
+    if let Err(e) = std::fs::create_dir_all(config_dir) {
+        eprintln!("warning: failed to create config directory: {}", e);
+    }
+    if let Err(e) = std::fs::write(&machine_id_file, &machine_id) {
+        eprintln!("warning: failed to write machine id file: {}", e);
+    }
+
+    machine_id
 }
 
 /// Get the data directory for per-machine database files.

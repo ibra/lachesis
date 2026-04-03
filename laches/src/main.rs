@@ -3,10 +3,9 @@ use colored::Colorize;
 use laches::{
     cli::{AutostartToggle, Cli, Commands, ConfigAction, DataAction, FilterMode},
     commands::autostart::handle_autostart,
-    config::{load_or_create_config, save_config},
+    config::{get_machine_id, load_or_create_config, save_config},
     db::{date_range_for_day, last_n_days_range, today_range, Database},
     process::{start_monitoring, stop_monitoring},
-    store::get_machine_id,
     utils::format_uptime,
 };
 use std::error::Error;
