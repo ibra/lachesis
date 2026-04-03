@@ -31,8 +31,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut skip_save = false;
 
     match &cli.command {
-        Commands::Start => start_monitoring(&mut laches_store, &store_path),
-        Commands::Stop => stop_monitoring(&mut laches_store),
+        Commands::Start => start_monitoring(&store_path),
+        Commands::Stop => stop_monitoring(&store_path),
         Commands::List {
             tag,
             today,
