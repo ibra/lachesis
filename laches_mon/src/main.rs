@@ -37,6 +37,7 @@ impl DaemonLogger {
     fn log(&mut self, msg: &str) {
         let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
         let _ = writeln!(self.file, "[{}] {}", timestamp, msg);
+        let _ = self.file.flush();
     }
 }
 
