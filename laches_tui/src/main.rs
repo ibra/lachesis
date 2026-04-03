@@ -80,20 +80,28 @@ fn run(
                     continue;
                 }
 
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                    KeyCode::Char('1') => app.set_tab(0),
-                    KeyCode::Char('2') => app.set_tab(1),
-                    KeyCode::Char('3') => app.set_tab(2),
-                    KeyCode::Char('4') => app.set_tab(3),
-                    KeyCode::Tab => app.next_tab(),
-                    KeyCode::BackTab => app.prev_tab(),
-                    KeyCode::Left | KeyCode::Char('h') => app.prev_day(),
-                    KeyCode::Right | KeyCode::Char('l') => app.next_day(),
-                    KeyCode::Up | KeyCode::Char('k') => app.scroll_up(),
-                    KeyCode::Down | KeyCode::Char('j') => app.scroll_down(),
-                    KeyCode::Char('r') => app.refresh_data(),
-                    _ => {}
+                if app.show_help {
+                    match key.code {
+                        KeyCode::Char('?') | KeyCode::Esc => app.toggle_help(),
+                        _ => {}
+                    }
+                } else {
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+                        KeyCode::Char('?') => app.toggle_help(),
+                        KeyCode::Char('1') => app.set_tab(0),
+                        KeyCode::Char('2') => app.set_tab(1),
+                        KeyCode::Char('3') => app.set_tab(2),
+                        KeyCode::Char('4') => app.set_tab(3),
+                        KeyCode::Tab => app.next_tab(),
+                        KeyCode::BackTab => app.prev_tab(),
+                        KeyCode::Left | KeyCode::Char('h') => app.prev_day(),
+                        KeyCode::Right | KeyCode::Char('l') => app.next_day(),
+                        KeyCode::Up | KeyCode::Char('k') => app.scroll_up(),
+                        KeyCode::Down | KeyCode::Char('j') => app.scroll_down(),
+                        KeyCode::Char('r') => app.refresh_data(),
+                        _ => {}
+                    }
                 }
             }
         } else {

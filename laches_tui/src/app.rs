@@ -1,7 +1,7 @@
 use laches::db::{date_range_for_day, Database, ProcessSummary, Session};
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Tabs},
+    widgets::{Block, Borders, Clear, Padding, Paragraph, Tabs},
 };
 use std::path::PathBuf;
 
@@ -26,6 +26,7 @@ pub struct App<'a> {
     pub daily_totals: Vec<(String, i64)>,
     pub current_process: Option<String>,
     pub daemon_running: bool,
+    pub show_help: bool,
     pub last_error: Option<String>,
 }
 
@@ -44,6 +45,7 @@ impl<'a> App<'a> {
             daily_totals: Vec::new(),
             current_process: None,
             daemon_running: false,
+            show_help: false,
             last_error: None,
         }
     }
@@ -87,6 +89,10 @@ impl<'a> App<'a> {
                 self.refresh_data();
             }
         }
+    }
+
+    pub fn toggle_help(&mut self) {
+        self.show_help = !self.show_help;
     }
 
     pub fn scroll_up(&mut self) {
@@ -245,5 +251,49 @@ impl<'a> App<'a> {
             ])
         };
         frame.render_widget(footer, chunks[2]);
+
+        if self.show_help {
+            self.render_help(frame, theme);
+        }
+    }
+
+    fn render_help(&self, frame: &mut Frame, theme: &Theme) {
+        let area = frame.area();
+        let w = 44.min(area.width.saturating_sub(4));
+        let h = 16.min(area.height.saturating_sub(4));
+        let x = (area.width.saturating_sub(w)) / 2;
+        let y = (area.height.saturating_sub(h)) / 2;
+        let popup = Rect::new(x, y, w, h);
+
+        let bindings = [
+            ("q / Esc", "quit"),
+            ("1..4", "jump to tab"),
+            ("Tab / Shift+Tab", "next / previous tab"),
+            ("h / Left", "previous day"),
+            ("l / Right", "next day"),
+            ("j / Down", "scroll down"),
+            ("k / Up", "scroll up"),
+            ("g", "group by tag"),
+            ("r", "refresh data"),
+            ("?", "toggle this help"),
+        ];
+
+        let mut lines: Vec<Line> = Vec::new();
+        lines.push(Line::from(""));
+        for (key, desc) in &bindings {
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {:20}", key), theme.key_hint()),
+                Span::styled(*desc, theme.key_desc()),
+            ]));
+        }
+
+        frame.render_widget(Clear, popup);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme.accent))
+            .title(" keybindings ")
+            .padding(Padding::horizontal(1));
+        let help = Paragraph::new(lines).block(block);
+        frame.render_widget(help, popup);
     }
 }
