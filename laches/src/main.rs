@@ -43,8 +43,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             range,
             sessions,
             verbose,
-            all_machines: _,
+            all_machines,
         } => {
+            if *all_machines {
+                eprintln!(
+                    "warning: --all-machines is not yet implemented, showing local machine only"
+                );
+            }
             let (start, end, label) =
                 resolve_time_range(*today, *week, *month, date.as_deref(), range.as_deref())?;
 
@@ -121,7 +126,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         Commands::Config { action } => match action {
             Some(ConfigAction::StorePath { path: _ }) => {
-                println!("info: store-path migration not yet implemented for sqlite");
+                eprintln!("warning: store-path is not yet implemented");
                 Ok(())
             }
             None => {
@@ -177,8 +182,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             DataAction::Export {
                 output,
                 duration,
-                all_machines: _,
-            } => data::export_sessions(&db, output, duration.as_deref()),
+                all_machines,
+            } => {
+                if *all_machines {
+                    eprintln!("warning: --all-machines is not yet implemented, exporting local machine only");
+                }
+                data::export_sessions(&db, output, duration.as_deref())
+            }
 
             DataAction::Delete { all, duration } => {
                 data::delete_sessions(&db, *all, duration.as_deref())
