@@ -14,6 +14,7 @@ pub struct App<'a> {
     pub config_dir: PathBuf,
     pub tab: usize,
     pub viewing_date: chrono::NaiveDate,
+    pub earliest_date: Option<chrono::NaiveDate>,
 
     pub scroll_offsets: [usize; TAB_COUNT],
 
@@ -38,6 +39,7 @@ impl<'a> App<'a> {
             config_dir,
             tab: 0,
             viewing_date: chrono::Local::now().date_naive(),
+            earliest_date: None,
             scroll_offsets: [0; TAB_COUNT],
             summaries: Vec::new(),
             sessions: Vec::new(),
@@ -78,6 +80,11 @@ impl<'a> App<'a> {
 
     pub fn prev_day(&mut self) {
         if let Some(d) = self.viewing_date.pred_opt() {
+            if let Some(earliest) = self.earliest_date {
+                if d < earliest {
+                    return;
+                }
+            }
             self.viewing_date = d;
             self.scroll_offsets = [0; TAB_COUNT];
             self.refresh_data();
@@ -214,6 +221,16 @@ impl<'a> App<'a> {
         }
 
         self.daemon_running = laches::process::is_daemon_running(&self.config_dir);
+
+        if self.earliest_date.is_none() {
+            self.earliest_date = self
+                .db
+                .get_earliest_session_date()
+                .ok()
+                .flatten()
+                .and_then(|s| chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok());
+        }
+
         self.rebuild_tag_groups();
     }
 
