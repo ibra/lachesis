@@ -39,8 +39,16 @@ fn render_header(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
         String::new()
     };
     let status = if let Some(ref p) = app.current_process {
+        let title_suffix = app
+            .current_window_title
+            .as_ref()
+            .map(|t| {
+                let short = laches::utils::truncate_str(t, 30);
+                format!(" \u{2014} {}", short)
+            })
+            .unwrap_or_default();
         Span::styled(
-            format!("  |  \u{25cf} tracking: {}", p),
+            format!("  |  \u{25cf} {}{}", p, title_suffix),
             theme.header_tracking(),
         )
     } else if app.daemon_running {

@@ -31,6 +31,7 @@ pub struct App<'a> {
     pub idle_secs: i64,
     pub daily_totals: Vec<(String, i64)>,
     pub current_process: Option<String>,
+    pub current_window_title: Option<String>,
     pub daemon_running: bool,
     pub show_help: bool,
     pub group_by_tag: bool,
@@ -52,6 +53,7 @@ impl<'a> App<'a> {
             idle_secs: 0,
             daily_totals: Vec::new(),
             current_process: None,
+            current_window_title: None,
             daemon_running: false,
             show_help: false,
             group_by_tag: false,
@@ -199,16 +201,25 @@ impl<'a> App<'a> {
                 .push((date.format("%m/%d").to_string(), total));
         }
 
-        self.current_process = if self.is_viewing_today() {
-            self.db
+        if self.is_viewing_today() {
+            let open = self
+                .db
                 .get_open_session()
                 .ok()
                 .flatten()
-                .filter(|s| !s.idle)
-                .map(|s| s.process_name)
+                .filter(|s| !s.idle);
+            self.current_process = open.map(|s| s.process_name);
+
+            let tracker = laches::platform::create_tracker();
+            if let Some(info) = tracker.get_focused_window() {
+                self.current_window_title = info.window_title;
+            } else {
+                self.current_window_title = None;
+            }
         } else {
-            None
-        };
+            self.current_process = None;
+            self.current_window_title = None;
+        }
 
         self.daemon_running = laches::process::is_daemon_running(&self.config_dir);
         self.rebuild_tag_groups();
