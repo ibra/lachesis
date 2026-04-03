@@ -8,6 +8,7 @@ license = "MIT"
 [dependencies]
 laches = { path = "../laches" }
 
+chrono.workspace = true
 rusqlite.workspace = true
 ctrlc = { version = "3.4", features = ["termination"] }
 
