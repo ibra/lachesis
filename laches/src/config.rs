@@ -57,6 +57,7 @@ pub fn load_or_create_config(config_dir: &Path) -> Result<Config, Box<dyn Error>
     if config_path.exists() {
         let content = fs::read_to_string(&config_path)?;
         let config: Config = toml::from_str(&content)?;
+        validate_config(&config)?;
         Ok(config)
     } else {
         let config = Config::default();
@@ -64,6 +65,26 @@ pub fn load_or_create_config(config_dir: &Path) -> Result<Config, Box<dyn Error>
         println!("info: created default config at {}", config_path.display());
         Ok(config)
     }
+}
+
+/// Validate config values to prevent misconfiguration.
+fn validate_config(config: &Config) -> Result<(), Box<dyn Error>> {
+    if config.daemon.check_interval == 0 {
+        return Err("error: check_interval must be greater than 0".into());
+    }
+    if config.daemon.idle_timeout == 0 {
+        return Err("error: idle_timeout must be greater than 0".into());
+    }
+    let valid_modes = ["default", "whitelist", "blacklist"];
+    if !valid_modes.contains(&config.filtering.mode.as_str()) {
+        return Err(format!(
+            "error: invalid filtering mode '{}'. must be one of: {}",
+            config.filtering.mode,
+            valid_modes.join(", ")
+        )
+        .into());
+    }
+    Ok(())
 }
 
 /// Write config to disk.
@@ -216,6 +237,33 @@ mod tests {
 
         clear_daemon_pid(tmp.path());
         assert!(read_daemon_pid(tmp.path()).is_none());
+    }
+
+    #[test]
+    fn test_validate_rejects_zero_check_interval() {
+        let mut config = Config::default();
+        config.daemon.check_interval = 0;
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_rejects_zero_idle_timeout() {
+        let mut config = Config::default();
+        config.daemon.idle_timeout = 0;
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_rejects_invalid_mode() {
+        let mut config = Config::default();
+        config.filtering.mode = "invalid".to_string();
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_accepts_valid_config() {
+        let config = Config::default();
+        assert!(validate_config(&config).is_ok());
     }
 
     #[test]

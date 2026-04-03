@@ -10,9 +10,6 @@ use laches::{
 };
 use std::error::Error;
 
-#[allow(unused_imports)]
-use chrono::NaiveDateTime;
-
 fn main() -> Result<(), Box<dyn Error>> {
     let config_dir = match dirs::config_dir() {
         Some(dir) => dir.join("lachesis"),
