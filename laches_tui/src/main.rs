@@ -1,4 +1,5 @@
 mod app;
+mod theme;
 mod views;
 
 use app::App;
@@ -9,6 +10,7 @@ use crossterm::{
 };
 use ratatui::prelude::*;
 use std::{io, time::Duration};
+use theme::Theme;
 
 fn main() -> io::Result<()> {
     let config_dir = match dirs::config_dir() {
@@ -49,8 +51,9 @@ fn main() -> io::Result<()> {
         default_hook(info);
     }));
 
+    let theme = Theme::default();
     let mut app = App::new(&db);
-    let result = run(&mut terminal, &mut app);
+    let result = run(&mut terminal, &mut app, &theme);
 
     // restore terminal
     disable_raw_mode()?;
@@ -60,11 +63,15 @@ fn main() -> io::Result<()> {
     result
 }
 
-fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> io::Result<()> {
+fn run(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &mut App,
+    theme: &Theme,
+) -> io::Result<()> {
     app.refresh_data();
 
     loop {
-        terminal.draw(|f| app.render(f))?;
+        terminal.draw(|f| app.render(f, theme))?;
 
         // poll for events with a timeout so we can refresh data periodically
         if event::poll(Duration::from_secs(5))? {

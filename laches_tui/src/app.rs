@@ -4,6 +4,7 @@ use ratatui::{
     widgets::{Block, Borders, Tabs},
 };
 
+use crate::theme::Theme;
 use crate::views;
 
 const TAB_TITLES: [&str; 4] = ["today", "timeline", "trends", "sessions"];
@@ -145,7 +146,7 @@ impl<'a> App<'a> {
             .map(|s| s.process_name);
     }
 
-    pub fn render(&self, frame: &mut Frame) {
+    pub fn render(&self, frame: &mut Frame, theme: &Theme) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -155,51 +156,46 @@ impl<'a> App<'a> {
             ])
             .split(frame.area());
 
-        // tab bar with date in title
         let date_str = chrono::Local::now().format("%a %b %d").to_string();
         let title = format!(" lachesis \u{2500} {} ", date_str);
         let tabs = Tabs::new(TAB_TITLES.iter().map(|t| Line::from(*t)))
             .block(Block::default().borders(Borders::ALL).title(title))
             .select(self.tab)
-            .style(Style::default().fg(Color::DarkGray))
-            .highlight_style(Style::default().fg(Color::Cyan).bold())
-            .divider(Span::styled(
-                " \u{2502} ",
-                Style::default().fg(Color::DarkGray),
-            ));
+            .style(theme.tab_inactive())
+            .highlight_style(theme.tab_active())
+            .divider(theme.separator());
         frame.render_widget(tabs, chunks[0]);
 
-        // active view
         match self.tab {
-            0 => views::today::render(self, frame, chunks[1]),
-            1 => views::timeline::render(self, frame, chunks[1]),
-            2 => views::trends::render(self, frame, chunks[1]),
-            3 => views::sessions::render(self, frame, chunks[1]),
+            0 => views::today::render(self, frame, chunks[1], theme),
+            1 => views::timeline::render(self, frame, chunks[1], theme),
+            2 => views::trends::render(self, frame, chunks[1], theme),
+            3 => views::sessions::render(self, frame, chunks[1], theme),
             _ => {}
         }
 
         let footer = if let Some(ref err) = self.last_error {
             Line::from(vec![
-                Span::styled(" ERROR ", Style::default().fg(Color::Red).bold()),
-                Span::styled(err.as_str(), Style::default().fg(Color::Red)),
+                Span::styled(" ERROR ", theme.error_label()),
+                Span::styled(err.as_str(), theme.error_text()),
             ])
         } else {
-            let sep = Span::styled(" \u{2502} ", Style::default().fg(Color::DarkGray));
+            let sep = theme.separator();
             let time_str = chrono::Local::now().format("%H:%M").to_string();
             Line::from(vec![
-                Span::styled(" q", Style::default().bold()),
-                Span::styled(" quit", Style::default().fg(Color::DarkGray)),
+                Span::styled(" q", theme.key_hint()),
+                Span::styled(" quit", theme.key_desc()),
                 sep.clone(),
-                Span::styled("tab", Style::default().bold()),
-                Span::styled(" switch", Style::default().fg(Color::DarkGray)),
+                Span::styled("tab", theme.key_hint()),
+                Span::styled(" switch", theme.key_desc()),
                 sep.clone(),
-                Span::styled("j/k", Style::default().bold()),
-                Span::styled(" scroll", Style::default().fg(Color::DarkGray)),
+                Span::styled("j/k", theme.key_hint()),
+                Span::styled(" scroll", theme.key_desc()),
                 sep.clone(),
-                Span::styled("r", Style::default().bold()),
-                Span::styled(" refresh", Style::default().fg(Color::DarkGray)),
+                Span::styled("r", theme.key_hint()),
+                Span::styled(" refresh", theme.key_desc()),
                 sep,
-                Span::styled(time_str, Style::default().fg(Color::DarkGray)),
+                Span::styled(time_str, theme.key_desc()),
             ])
         };
         frame.render_widget(footer, chunks[2]);

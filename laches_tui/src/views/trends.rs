@@ -1,15 +1,16 @@
 use crate::app::App;
+use crate::theme::Theme;
 use ratatui::{
     prelude::*,
     widgets::{Bar, BarChart, BarGroup, Block, Borders, Paragraph},
 };
 
-pub fn render(app: &App, frame: &mut Frame, area: Rect) {
+pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     if app.daily_totals.is_empty() || app.daily_totals.iter().all(|(_, v)| *v == 0) {
         let empty = Paragraph::new(
             " no trend data available yet. usage will appear here after the first day.",
         )
-        .style(Style::default().fg(Color::DarkGray))
+        .style(theme.empty_text())
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -27,10 +28,6 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let inner_width = chunks[0].width.saturating_sub(2) as usize;
     let num_bars = app.daily_totals.len();
 
-    // compute bar_width dynamically so all bars fit in the available width
-    // each bar takes bar_width + bar_gap columns
-    // with bar_gap=1: num_bars * (bar_width + 1) - 1 <= inner_width
-    // bar_width = max(1, (inner_width + 1) / num_bars - 1)
     let bar_width = if num_bars > 0 {
         ((inner_width + 1) / num_bars).saturating_sub(1).max(1) as u16
     } else {
@@ -39,16 +36,13 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
 
     let bar_gap = if bar_width >= 2 { 1 } else { 0 };
 
-    // only show labels when bars are wide enough to fit them (5 chars: "MM/DD")
     let show_labels = bar_width >= 5;
-    // if bars are too narrow for all labels, show every Nth label
     let label_interval = if show_labels {
         1
     } else if bar_width >= 3 {
-        // show every other label with short format
         2
     } else {
-        0 // no labels at all
+        0
     };
 
     let bars: Vec<Bar> = app
@@ -62,7 +56,6 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                 if bar_width >= 5 {
                     label.clone()
                 } else {
-                    // short label: just the day part (after the /)
                     label.split('/').next_back().unwrap_or("").to_string()
                 }
             } else {
@@ -72,9 +65,9 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                 .value(minutes)
                 .label(Line::from(bar_label))
                 .style(Style::default().fg(if *secs > 0 {
-                    Color::Cyan
+                    theme.bar_filled
                 } else {
-                    Color::DarkGray
+                    theme.bar_empty
                 }))
         })
         .collect();
@@ -88,16 +81,11 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .data(BarGroup::default().bars(&bars))
         .bar_width(bar_width)
         .bar_gap(bar_gap)
-        .bar_style(Style::default().fg(Color::Cyan))
-        .value_style(
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-        );
+        .bar_style(Style::default().fg(theme.bar_filled))
+        .value_style(theme.bar_value());
 
     frame.render_widget(chart, chunks[0]);
 
-    // summary stats
     let total_days = app.daily_totals.len() as i64;
     let total_secs: i64 = app.daily_totals.iter().map(|(_, s)| s).sum();
     let avg_secs = if total_days > 0 {
