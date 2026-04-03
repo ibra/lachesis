@@ -6,7 +6,7 @@ use ratatui::{
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     if app.daily_totals.is_empty() || app.daily_totals.iter().all(|(_, v)| *v == 0) {
-        let empty = Paragraph::new("no trend data available yet.")
+        let empty = Paragraph::new(" no trend data available yet.")
             .style(Style::default().fg(Color::DarkGray))
             .block(
                 Block::default()
@@ -22,15 +22,58 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .constraints([Constraint::Min(0), Constraint::Length(3)])
         .split(area);
 
+    let inner_width = chunks[0].width.saturating_sub(2) as usize;
+    let num_bars = app.daily_totals.len();
+
+    // compute bar_width dynamically so all bars fit in the available width
+    // each bar takes bar_width + bar_gap columns
+    // with bar_gap=1: num_bars * (bar_width + 1) - 1 <= inner_width
+    // bar_width = max(1, (inner_width + 1) / num_bars - 1)
+    let bar_width = if num_bars > 0 {
+        ((inner_width + 1) / num_bars).saturating_sub(1).max(1) as u16
+    } else {
+        1
+    };
+
+    let bar_gap = if bar_width >= 2 { 1 } else { 0 };
+
+    // only show labels when bars are wide enough to fit them (5 chars: "MM/DD")
+    let show_labels = bar_width >= 5;
+    // if bars are too narrow for all labels, show every Nth label
+    let label_interval = if show_labels {
+        1
+    } else if bar_width >= 3 {
+        // show every other label with short format
+        2
+    } else {
+        0 // no labels at all
+    };
+
     let bars: Vec<Bar> = app
         .daily_totals
         .iter()
-        .map(|(label, secs)| {
+        .enumerate()
+        .map(|(i, (label, secs))| {
             let minutes = (*secs / 60).max(0) as u64;
+            let show_this_label = label_interval > 0 && i % label_interval == 0;
+            let bar_label = if show_this_label {
+                if bar_width >= 5 {
+                    label.clone()
+                } else {
+                    // short label: just the day part (after the /)
+                    label.split('/').last().unwrap_or("").to_string()
+                }
+            } else {
+                String::new()
+            };
             Bar::default()
                 .value(minutes)
-                .label(Line::from(label.as_str()))
-                .style(Style::default().fg(Color::Cyan))
+                .label(Line::from(bar_label))
+                .style(Style::default().fg(if *secs > 0 {
+                    Color::Cyan
+                } else {
+                    Color::DarkGray
+                }))
         })
         .collect();
 
@@ -41,10 +84,14 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                 .title(" daily screentime (minutes) "),
         )
         .data(BarGroup::default().bars(&bars))
-        .bar_width(3)
-        .bar_gap(0)
+        .bar_width(bar_width)
+        .bar_gap(bar_gap)
         .bar_style(Style::default().fg(Color::Cyan))
-        .value_style(Style::default().fg(Color::White));
+        .value_style(
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        );
 
     frame.render_widget(chart, chunks[0]);
 
@@ -60,11 +107,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let active_days = app.daily_totals.iter().filter(|(_, s)| *s > 0).count();
 
     let stats = Paragraph::new(Line::from(vec![Span::raw(format!(
-        "  avg: {}  |  peak: {}  |  active: {}/{} days",
+        "  avg: {}  |  peak: {}  |  active: {}/{} days  |  total: {}",
         laches::utils::format_duration_hm(avg_secs),
         laches::utils::format_duration_hm(max_secs),
         active_days,
         total_days,
+        laches::utils::format_duration_hm(total_secs),
     ))]))
     .block(Block::default().borders(Borders::ALL));
 
