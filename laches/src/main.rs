@@ -470,11 +470,7 @@ fn print_sessions(
         };
 
         let title = s.window_title.as_deref().unwrap_or("");
-        let title_display = if title.len() > 40 {
-            format!("{}...", &title[..37])
-        } else {
-            title.to_string()
-        };
+        let title_display = laches::utils::truncate_str(title, 40);
 
         println!(
             "  {}-{}  {:<22} {:>8}  {}",

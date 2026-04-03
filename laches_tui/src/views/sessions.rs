@@ -44,11 +44,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
             };
 
             let title = s.window_title.as_deref().unwrap_or("");
-            let title_display = if title.len() > 35 {
-                format!("{}...", &title[..32])
-            } else {
-                title.to_string()
-            };
+            let title_display = laches::utils::truncate_str(title, 35);
 
             let time_range = format!("{}-{}", start, end);
 
