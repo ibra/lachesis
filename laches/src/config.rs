@@ -1,11 +1,68 @@
+use crate::error::LachesError;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
+use std::fmt;
 use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
 const CONFIG_NAME: &str = "config.toml";
 const PID_FILE: &str = ".daemon_pid";
+
+/// Filtering mode for the daemon.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum FilterMode {
+    /// Track all processes (default behavior).
+    Default,
+    /// Only track processes matching the whitelist.
+    Whitelist,
+    /// Track everything except processes matching the blacklist.
+    Blacklist,
+}
+
+impl fmt::Display for FilterMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FilterMode::Default => write!(f, "default"),
+            FilterMode::Whitelist => write!(f, "whitelist"),
+            FilterMode::Blacklist => write!(f, "blacklist"),
+        }
+    }
+}
+
+/// A filter pattern that can be either an exact string match or a regex.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct FilterPattern {
+    pub pattern: String,
+    #[serde(default)]
+    pub is_regex: bool,
+}
+
+impl FilterPattern {
+    pub fn exact(pattern: impl Into<String>) -> Self {
+        Self {
+            pattern: pattern.into(),
+            is_regex: false,
+        }
+    }
+
+    pub fn regex(pattern: impl Into<String>) -> Self {
+        Self {
+            pattern: pattern.into(),
+            is_regex: true,
+        }
+    }
+}
+
+impl fmt::Display for FilterPattern {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_regex {
+            write!(f, "{} (regex)", self.pattern)
+        } else {
+            write!(f, "{}", self.pattern)
+        }
+    }
+}
 
 /// Top-level configuration, stored as config.toml.
 /// This is separate from the data (SQLite) -- config is small, rarely changes,
@@ -26,12 +83,11 @@ pub struct DaemonConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FilteringConfig {
-    /// "default", "whitelist", or "blacklist".
-    pub mode: String,
+    pub mode: FilterMode,
     #[serde(default)]
-    pub whitelist: Vec<String>,
+    pub whitelist: Vec<FilterPattern>,
     #[serde(default)]
-    pub blacklist: Vec<String>,
+    pub blacklist: Vec<FilterPattern>,
 }
 
 impl Default for Config {
@@ -42,7 +98,7 @@ impl Default for Config {
                 idle_timeout: 300,
             },
             filtering: FilteringConfig {
-                mode: "default".to_string(),
+                mode: FilterMode::Default,
                 whitelist: Vec::new(),
                 blacklist: Vec::new(),
             },
@@ -51,12 +107,13 @@ impl Default for Config {
 }
 
 /// Load config from disk, or create the default if it doesn't exist.
-pub fn load_or_create_config(config_dir: &Path) -> Result<Config, Box<dyn Error>> {
+pub fn load_or_create_config(config_dir: &Path) -> Result<Config, LachesError> {
     let config_path = config_dir.join(CONFIG_NAME);
 
     if config_path.exists() {
         let content = fs::read_to_string(&config_path)?;
         let config: Config = toml::from_str(&content)?;
+        validate_config(&config)?;
         Ok(config)
     } else {
         let config = Config::default();
@@ -66,8 +123,33 @@ pub fn load_or_create_config(config_dir: &Path) -> Result<Config, Box<dyn Error>
     }
 }
 
-/// Write config to disk.
-pub fn save_config(config: &Config, config_dir: &Path) -> Result<(), Box<dyn Error>> {
+fn validate_config(config: &Config) -> Result<(), LachesError> {
+    if config.daemon.check_interval == 0 {
+        return Err(LachesError::Config(
+            "check_interval must be greater than 0".to_string(),
+        ));
+    }
+    if config.daemon.idle_timeout == 0 {
+        return Err(LachesError::Config(
+            "idle_timeout must be greater than 0".to_string(),
+        ));
+    }
+    for p in config
+        .filtering
+        .whitelist
+        .iter()
+        .chain(config.filtering.blacklist.iter())
+    {
+        if p.is_regex {
+            regex::Regex::new(&p.pattern).map_err(|e| {
+                LachesError::Config(format!("invalid regex '{}': {}", p.pattern, e))
+            })?;
+        }
+    }
+    Ok(())
+}
+
+pub fn save_config(config: &Config, config_dir: &Path) -> Result<(), LachesError> {
     fs::create_dir_all(config_dir)?;
     let config_path = config_dir.join(CONFIG_NAME);
     let content = toml::to_string_pretty(config)?;
@@ -83,7 +165,7 @@ pub fn read_daemon_pid(config_dir: &Path) -> Option<u32> {
 }
 
 /// Write the daemon PID to the pid file.
-pub fn write_daemon_pid(config_dir: &Path, pid: u32) -> Result<(), Box<dyn Error>> {
+pub fn write_daemon_pid(config_dir: &Path, pid: u32) -> Result<(), LachesError> {
     let pid_path = config_dir.join(PID_FILE);
     fs::write(&pid_path, pid.to_string())?;
     Ok(())
@@ -118,13 +200,26 @@ pub fn get_hostname() -> String {
 }
 
 /// Get a stable machine identifier. Generated once, stored in .machine_id.
+/// If the file exists but is empty/corrupted, logs a warning and generates
+/// a new ID. If the file doesn't exist, creates one.
 pub fn get_machine_id(config_dir: &Path) -> String {
     let machine_id_file = config_dir.join(".machine_id");
 
-    if let Ok(existing_id) = std::fs::read_to_string(&machine_id_file) {
-        let trimmed = existing_id.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
+    if machine_id_file.exists() {
+        match std::fs::read_to_string(&machine_id_file) {
+            Ok(content) => {
+                let trimmed = content.trim();
+                if !trimmed.is_empty() {
+                    return trimmed.to_string();
+                }
+                eprintln!("warning: machine id file exists but is empty, generating new id");
+            }
+            Err(e) => {
+                eprintln!(
+                    "warning: failed to read machine id file: {}. generating new id",
+                    e
+                );
+            }
         }
     }
 
@@ -162,7 +257,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.daemon.check_interval, 2);
         assert_eq!(config.daemon.idle_timeout, 300);
-        assert_eq!(config.filtering.mode, "default");
+        assert_eq!(config.filtering.mode, FilterMode::Default);
         assert!(config.filtering.whitelist.is_empty());
         assert!(config.filtering.blacklist.is_empty());
     }
@@ -193,15 +288,20 @@ mod tests {
         let tmp = TempDir::new().unwrap();
 
         let mut config = Config::default();
-        config.filtering.mode = "whitelist".to_string();
-        config.filtering.whitelist = vec!["firefox".to_string(), "code".to_string()];
+        config.filtering.mode = FilterMode::Whitelist;
+        config.filtering.whitelist = vec![
+            FilterPattern::exact("firefox"),
+            FilterPattern::exact("code"),
+        ];
         config.daemon.idle_timeout = 600;
 
         save_config(&config, tmp.path()).unwrap();
         let loaded = load_or_create_config(tmp.path()).unwrap();
 
-        assert_eq!(loaded.filtering.mode, "whitelist");
-        assert_eq!(loaded.filtering.whitelist, vec!["firefox", "code"]);
+        assert_eq!(loaded.filtering.mode, FilterMode::Whitelist);
+        assert_eq!(loaded.filtering.whitelist.len(), 2);
+        assert_eq!(loaded.filtering.whitelist[0].pattern, "firefox");
+        assert!(!loaded.filtering.whitelist[0].is_regex);
         assert_eq!(loaded.daemon.idle_timeout, 600);
     }
 
@@ -216,6 +316,36 @@ mod tests {
 
         clear_daemon_pid(tmp.path());
         assert!(read_daemon_pid(tmp.path()).is_none());
+    }
+
+    #[test]
+    fn test_validate_rejects_zero_check_interval() {
+        let mut config = Config::default();
+        config.daemon.check_interval = 0;
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_rejects_zero_idle_timeout() {
+        let mut config = Config::default();
+        config.daemon.idle_timeout = 0;
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_rejects_invalid_regex_pattern() {
+        let mut config = Config::default();
+        config
+            .filtering
+            .whitelist
+            .push(FilterPattern::regex("[invalid"));
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_accepts_valid_config() {
+        let config = Config::default();
+        assert!(validate_config(&config).is_ok());
     }
 
     #[test]

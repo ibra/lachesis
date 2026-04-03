@@ -1,5 +1,46 @@
 use std::io::{self, Write};
 
+/// Truncate a string to at most `max_chars` characters, appending "..." if truncated.
+/// Safe for multi-byte UTF-8 strings (never panics on char boundaries).
+pub fn truncate_str(s: &str, max_chars: usize) -> String {
+    let char_count = s.chars().count();
+    if char_count <= max_chars {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max_chars.saturating_sub(3)).collect();
+        format!("{}...", truncated)
+    }
+}
+
+/// Format a duration in seconds as a short string (hours, minutes, seconds).
+/// Used by TUI views for session-level precision.
+pub fn format_duration_short(seconds: i64) -> String {
+    let seconds = seconds.max(0);
+    let h = seconds / 3600;
+    let m = (seconds % 3600) / 60;
+    let s = seconds % 60;
+    if h > 0 {
+        format!("{}h {}m", h, m)
+    } else if m > 0 {
+        format!("{}m {}s", m, s)
+    } else {
+        format!("{}s", s)
+    }
+}
+
+/// Format a duration in seconds as a compact hours+minutes string (no seconds).
+/// Used for high-level summaries where seconds are noise.
+pub fn format_duration_hm(seconds: i64) -> String {
+    let seconds = seconds.max(0);
+    let h = seconds / 3600;
+    let m = (seconds % 3600) / 60;
+    if h > 0 {
+        format!("{}h {}m", h, m)
+    } else {
+        format!("{}m", m)
+    }
+}
+
 pub fn format_uptime(seconds: u64) -> String {
     let days = seconds / 86400;
     let hours = (seconds % 86400) / 3600;
@@ -15,6 +56,12 @@ pub fn format_uptime(seconds: u64) -> String {
     } else {
         format!("{}s", seconds)
     }
+}
+
+pub fn session_duration_secs(start_time: &str, end_time: &str) -> Option<i64> {
+    let st = chrono::NaiveDateTime::parse_from_str(start_time, crate::db::TIMESTAMP_FORMAT).ok()?;
+    let en = chrono::NaiveDateTime::parse_from_str(end_time, crate::db::TIMESTAMP_FORMAT).ok()?;
+    Some((en - st).num_seconds().max(0))
 }
 
 pub fn confirm(prompt: &str) -> bool {
@@ -77,5 +124,71 @@ mod tests {
         // 100 days, 12 hours, 34 minutes, 56 seconds
         let complex = 100 * 86400 + 12 * 3600 + 34 * 60 + 56;
         assert_eq!(format_uptime(complex), "100d 12h 34m 56s");
+    }
+
+    #[test]
+    fn test_truncate_str_short() {
+        assert_eq!(truncate_str("hello", 10), "hello");
+        assert_eq!(truncate_str("hello", 5), "hello");
+    }
+
+    #[test]
+    fn test_truncate_str_exact_boundary() {
+        assert_eq!(truncate_str("abcde", 5), "abcde");
+    }
+
+    #[test]
+    fn test_truncate_str_long() {
+        assert_eq!(truncate_str("hello world, this is long", 10), "hello w...");
+    }
+
+    #[test]
+    fn test_truncate_str_multibyte_utf8() {
+        // emoji and CJK characters are multi-byte in UTF-8
+        let s = "日本語テスト文字列です";
+        let result = truncate_str(s, 6);
+        assert_eq!(result, "日本語...");
+    }
+
+    #[test]
+    fn test_truncate_str_empty() {
+        assert_eq!(truncate_str("", 5), "");
+    }
+
+    #[test]
+    fn test_format_duration_short_seconds() {
+        assert_eq!(format_duration_short(0), "0s");
+        assert_eq!(format_duration_short(45), "45s");
+    }
+
+    #[test]
+    fn test_format_duration_short_minutes() {
+        assert_eq!(format_duration_short(90), "1m 30s");
+        assert_eq!(format_duration_short(3599), "59m 59s");
+    }
+
+    #[test]
+    fn test_format_duration_short_hours() {
+        assert_eq!(format_duration_short(3600), "1h 0m");
+        assert_eq!(format_duration_short(7260), "2h 1m");
+    }
+
+    #[test]
+    fn test_format_duration_short_negative() {
+        // negative values should be clamped to 0
+        assert_eq!(format_duration_short(-100), "0s");
+    }
+
+    #[test]
+    fn test_format_duration_hm_minutes() {
+        assert_eq!(format_duration_hm(0), "0m");
+        assert_eq!(format_duration_hm(90), "1m");
+        assert_eq!(format_duration_hm(3599), "59m");
+    }
+
+    #[test]
+    fn test_format_duration_hm_hours() {
+        assert_eq!(format_duration_hm(3600), "1h 0m");
+        assert_eq!(format_duration_hm(7260), "2h 1m");
     }
 }

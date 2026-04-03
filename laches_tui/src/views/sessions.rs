@@ -1,22 +1,23 @@
 use crate::app::App;
+use crate::theme::Theme;
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
+    widgets::{Block, Borders, Cell, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
 
-pub fn render(app: &App, frame: &mut Frame, area: Rect) {
-    let non_idle: Vec<_> = app.today_sessions.iter().filter(|s| !s.idle).collect();
+pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let non_idle: Vec<_> = app.sessions.iter().filter(|s| !s.idle).collect();
 
     if non_idle.is_empty() {
-        let empty = Paragraph::new("no sessions today.")
-            .style(Style::default().fg(Color::DarkGray))
-            .block(Block::default().borders(Borders::ALL).title(" sessions "));
-        frame.render_widget(empty, area);
+        super::render_empty(app, frame, area, theme, "sessions");
         return;
     }
 
-    let max_visible = area.height.saturating_sub(3) as usize;
-    let scroll = app.scroll.min(non_idle.len().saturating_sub(max_visible));
+    let max_visible = area.height.saturating_sub(4) as usize;
+    if max_visible == 0 {
+        return;
+    }
+    let scroll = app.scroll_offsets[3].min(non_idle.len().saturating_sub(max_visible));
 
     let rows: Vec<Row> = non_idle
         .iter()
@@ -31,29 +32,21 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                 .unwrap_or("now");
 
             let duration = if let Some(ref et) = s.end_time {
-                let st = chrono::NaiveDateTime::parse_from_str(&s.start_time, "%Y-%m-%dT%H:%M:%S");
-                let en = chrono::NaiveDateTime::parse_from_str(et, "%Y-%m-%dT%H:%M:%S");
-                if let (Ok(st), Ok(en)) = (st, en) {
-                    let secs = (en - st).num_seconds().max(0);
-                    format_duration(secs)
-                } else {
-                    "?".to_string()
+                match laches::utils::session_duration_secs(&s.start_time, et) {
+                    Some(secs) => laches::utils::format_duration_short(secs),
+                    None => "?".to_string(),
                 }
             } else {
-                "active".to_string()
+                "\u{25cf} active".to_string()
             };
 
             let title = s.window_title.as_deref().unwrap_or("");
-            let title_display = if title.len() > 35 {
-                format!("{}...", &title[..32])
-            } else {
-                title.to_string()
-            };
+            let title_display = laches::utils::truncate_str(title, 40);
 
-            let time_range = format!("{}-{}", start, end);
+            let time_range = format!("{}\u{2013}{}", start, end);
 
             let style = if s.end_time.is_none() {
-                Style::default().fg(Color::Green)
+                theme.active_row()
             } else {
                 Style::default()
             };
@@ -68,14 +61,18 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         })
         .collect();
 
-    let header = Row::new(vec!["time", "process", "duration", "window title"])
-        .style(Style::default().fg(Color::Cyan).bold())
-        .bottom_margin(1);
+    let header = Row::new(vec![
+        Cell::from("time").style(theme.column_header()),
+        Cell::from("process").style(theme.column_header()),
+        Cell::from("duration").style(theme.column_header()),
+        Cell::from("window title").style(theme.column_header()),
+    ])
+    .bottom_margin(1);
 
     let widths = [
         Constraint::Length(11),
         Constraint::Length(22),
-        Constraint::Length(10),
+        Constraint::Length(12),
         Constraint::Min(20),
     ];
 
@@ -95,17 +92,19 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .block(Block::default().borders(Borders::ALL).title(scroll_info));
 
     frame.render_widget(table, area);
-}
 
-fn format_duration(seconds: i64) -> String {
-    let h = seconds / 3600;
-    let m = (seconds % 3600) / 60;
-    let s = seconds % 60;
-    if h > 0 {
-        format!("{}h {}m", h, m)
-    } else if m > 0 {
-        format!("{}m {}s", m, s)
-    } else {
-        format!("{}s", s)
+    if non_idle.len() > max_visible {
+        let mut scrollbar_state =
+            ScrollbarState::new(non_idle.len().saturating_sub(max_visible)).position(scroll);
+        frame.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(None)
+                .end_symbol(None),
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
     }
 }

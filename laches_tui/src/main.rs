@@ -1,4 +1,6 @@
 mod app;
+mod renderer;
+mod theme;
 mod views;
 
 use app::App;
@@ -9,6 +11,7 @@ use crossterm::{
 };
 use ratatui::prelude::*;
 use std::{io, time::Duration};
+use theme::Theme;
 
 fn main() -> io::Result<()> {
     let config_dir = match dirs::config_dir() {
@@ -49,8 +52,9 @@ fn main() -> io::Result<()> {
         default_hook(info);
     }));
 
-    let mut app = App::new(&db);
-    let result = run(&mut terminal, &mut app);
+    let theme = Theme::default();
+    let mut app = App::new(&db, config_dir);
+    let result = run(&mut terminal, &mut app, &theme);
 
     // restore terminal
     disable_raw_mode()?;
@@ -60,11 +64,15 @@ fn main() -> io::Result<()> {
     result
 }
 
-fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> io::Result<()> {
+fn run(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &mut App,
+    theme: &Theme,
+) -> io::Result<()> {
     app.refresh_data();
 
     loop {
-        terminal.draw(|f| app.render(f))?;
+        terminal.draw(|f| renderer::render(app, f, theme))?;
 
         // poll for events with a timeout so we can refresh data periodically
         if event::poll(Duration::from_secs(5))? {
@@ -73,18 +81,29 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> 
                     continue;
                 }
 
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                    KeyCode::Char('1') => app.set_tab(0),
-                    KeyCode::Char('2') => app.set_tab(1),
-                    KeyCode::Char('3') => app.set_tab(2),
-                    KeyCode::Char('4') => app.set_tab(3),
-                    KeyCode::Tab => app.next_tab(),
-                    KeyCode::BackTab => app.prev_tab(),
-                    KeyCode::Up | KeyCode::Char('k') => app.scroll_up(),
-                    KeyCode::Down | KeyCode::Char('j') => app.scroll_down(),
-                    KeyCode::Char('r') => app.refresh_data(),
-                    _ => {}
+                if app.show_help {
+                    match key.code {
+                        KeyCode::Char('?') | KeyCode::Esc => app.toggle_help(),
+                        _ => {}
+                    }
+                } else {
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+                        KeyCode::Char('?') => app.toggle_help(),
+                        KeyCode::Char('1') => app.set_tab(0),
+                        KeyCode::Char('2') => app.set_tab(1),
+                        KeyCode::Char('3') => app.set_tab(2),
+                        KeyCode::Char('4') => app.set_tab(3),
+                        KeyCode::Tab => app.next_tab(),
+                        KeyCode::BackTab => app.prev_tab(),
+                        KeyCode::Left | KeyCode::Char('h') => app.prev_day(),
+                        KeyCode::Right | KeyCode::Char('l') => app.next_day(),
+                        KeyCode::Up | KeyCode::Char('k') => app.scroll_up(),
+                        KeyCode::Down | KeyCode::Char('j') => app.scroll_down(),
+                        KeyCode::Char('g') => app.toggle_group_by_tag(),
+                        KeyCode::Char('r') => app.refresh_data(),
+                        _ => {}
+                    }
                 }
             }
         } else {

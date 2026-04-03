@@ -1,89 +1,261 @@
 use crate::app::App;
+use crate::theme::Theme;
 use ratatui::{
     prelude::*,
-    widgets::{Bar, BarChart, BarGroup, Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
-pub fn render(app: &App, frame: &mut Frame, area: Rect) {
+pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(0)])
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(0),
+            Constraint::Length(3),
+        ])
         .split(area);
 
-    // header with total time and current process
-    let active = format_duration(app.today_active);
-    let idle = if app.today_idle > 0 {
-        format!("  idle: {}", format_duration(app.today_idle))
+    render_header(app, frame, chunks[0], theme);
+
+    if app.group_by_tag && !app.tag_groups.is_empty() {
+        render_tag_groups(app, frame, chunks[1], theme);
+    } else if app.summaries.is_empty() {
+        super::render_empty(app, frame, chunks[1], theme, "top processes");
+    } else {
+        render_process_list(app, frame, chunks[1], theme);
+    }
+
+    render_footer(app, frame, chunks[2], theme);
+}
+
+fn render_header(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let active = laches::utils::format_duration_hm(app.active_secs);
+    let idle = if app.idle_secs > 0 {
+        format!(
+            "  idle: {}",
+            laches::utils::format_duration_hm(app.idle_secs)
+        )
     } else {
         String::new()
     };
-    let tracking = app
-        .current_process
-        .as_ref()
-        .map(|p| format!("  |  tracking: {}", p))
-        .unwrap_or_default();
+    let status = if let Some(ref p) = app.current_process {
+        let title_suffix = app
+            .current_window_title
+            .as_ref()
+            .map(|t| {
+                let short = laches::utils::truncate_str(t, 30);
+                format!(" \u{2014} {}", short)
+            })
+            .unwrap_or_default();
+        Span::styled(
+            format!("  |  \u{25cf} {}{}", p, title_suffix),
+            theme.header_tracking(),
+        )
+    } else if app.daemon_running {
+        Span::styled("  |  \u{25cf} daemon idle", theme.key_desc())
+    } else {
+        Span::styled("  |  \u{25cb} daemon stopped", theme.error_text())
+    };
+
+    let title = if app.is_viewing_today() {
+        " today ".to_string()
+    } else {
+        format!(" {} ", app.viewing_date.format("%Y-%m-%d"))
+    };
 
     let header = Paragraph::new(Line::from(vec![
-        Span::styled(
-            format!("active: {}", active),
-            Style::default().fg(Color::Green).bold(),
-        ),
-        Span::styled(idle, Style::default().fg(Color::DarkGray)),
-        Span::styled(tracking, Style::default().fg(Color::Cyan)),
+        Span::styled(format!(" active: {}", active), theme.header_active()),
+        Span::styled(idle, theme.key_desc()),
+        status,
     ]))
-    .block(Block::default().borders(Borders::ALL).title(" today "));
-    frame.render_widget(header, chunks[0]);
+    .block(Block::default().borders(Borders::ALL).title(title));
+    frame.render_widget(header, area);
+}
 
-    // bar chart of top processes
-    if app.today_summaries.is_empty() {
-        let empty =
-            Paragraph::new("no tracked data for today. start the daemon with `laches start`.")
-                .style(Style::default().fg(Color::DarkGray))
-                .block(Block::default().borders(Borders::ALL));
-        frame.render_widget(empty, chunks[1]);
+fn render_process_list(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let inner_height = area.height.saturating_sub(2) as usize;
+    let inner_width = area.width.saturating_sub(2) as usize;
+    if inner_height == 0 || inner_width == 0 {
         return;
     }
 
-    let bars: Vec<Bar> = app
-        .today_summaries
+    let total_items = app.summaries.len();
+    let scroll = app.scroll_offsets[0].min(total_items.saturating_sub(inner_height));
+
+    let total_secs: i64 = app.summaries.iter().map(|s| s.total_seconds).sum();
+    let max_secs = app
+        .summaries
         .iter()
-        .take(15)
-        .map(|s| {
-            let minutes = (s.total_seconds / 60).max(1) as u64;
-            let label = if s.process_name.len() > 18 {
-                format!("{}...", &s.process_name[..15])
-            } else {
-                s.process_name.clone()
-            };
-            Bar::default()
-                .value(minutes)
-                .label(Line::from(label))
-                .style(Style::default().fg(Color::Cyan))
-        })
-        .collect();
+        .map(|s| s.total_seconds)
+        .max()
+        .unwrap_or(1)
+        .max(1);
 
-    let chart = BarChart::default()
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" top processes (minutes) "),
+    let name_width = 20.min(inner_width.saturating_sub(22));
+    let bar_width = inner_width.saturating_sub(22 + name_width).max(4);
+
+    let mut lines: Vec<Line> = Vec::with_capacity(inner_height);
+
+    for (i, s) in app
+        .summaries
+        .iter()
+        .skip(scroll)
+        .take(inner_height)
+        .enumerate()
+    {
+        let rank = scroll + i + 1;
+        let name = laches::utils::truncate_str(&s.process_name, name_width);
+        let padded_name = format!("{:<width$}", name, width = name_width);
+
+        let filled =
+            ((s.total_seconds as f64 / max_secs as f64) * bar_width as f64).round() as usize;
+        let empty = bar_width.saturating_sub(filled);
+        let bar_filled = "\u{2588}".repeat(filled);
+        let bar_empty = "\u{2591}".repeat(empty);
+
+        let duration = laches::utils::format_duration_hm(s.total_seconds);
+        let pct = if total_secs > 0 {
+            (s.total_seconds as f64 / total_secs as f64 * 100.0).round() as u32
+        } else {
+            0
+        };
+
+        lines.push(Line::from(vec![
+            Span::styled(format!(" {:>2}. ", rank), theme.rank_style()),
+            Span::raw(padded_name),
+            Span::raw(" "),
+            Span::styled(bar_filled, Style::default().fg(theme.bar_filled)),
+            Span::styled(bar_empty, Style::default().fg(theme.bar_empty)),
+            Span::raw(format!(" {:>8} ", duration)),
+            Span::styled(format!("{:>3}%", pct), theme.pct_style()),
+        ]));
+    }
+
+    let title = if total_items > inner_height {
+        format!(
+            " top processes ({}-{} of {}) ",
+            scroll + 1,
+            (scroll + inner_height).min(total_items),
+            total_items
         )
-        .data(BarGroup::default().bars(&bars))
-        .bar_width(3)
-        .bar_gap(1)
-        .direction(Direction::Horizontal)
-        .bar_style(Style::default().fg(Color::Cyan))
-        .value_style(Style::default().fg(Color::White).bold());
+    } else {
+        format!(" top processes ({}) ", total_items)
+    };
 
-    frame.render_widget(chart, chunks[1]);
+    let block = Block::default().borders(Borders::ALL).title(title);
+    let para = Paragraph::new(lines).block(block);
+    frame.render_widget(para, area);
+
+    if total_items > inner_height {
+        let mut scrollbar_state =
+            ScrollbarState::new(total_items.saturating_sub(inner_height)).position(scroll);
+        frame.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(None)
+                .end_symbol(None),
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
+    }
 }
 
-fn format_duration(seconds: i64) -> String {
-    let h = seconds / 3600;
-    let m = (seconds % 3600) / 60;
-    if h > 0 {
-        format!("{}h {}m", h, m)
-    } else {
-        format!("{}m", m)
+fn render_tag_groups(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let inner_height = area.height.saturating_sub(2) as usize;
+    let inner_width = area.width.saturating_sub(2) as usize;
+    if inner_height == 0 || inner_width == 0 {
+        return;
     }
+
+    let total_items = app.tag_groups.len();
+    let scroll = app.scroll_offsets[0].min(total_items.saturating_sub(inner_height));
+
+    let max_secs = app
+        .tag_groups
+        .iter()
+        .map(|g| g.total_seconds)
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    let total_secs: i64 = app.tag_groups.iter().map(|g| g.total_seconds).sum();
+
+    let name_width = 20.min(inner_width.saturating_sub(22));
+    let bar_width = inner_width.saturating_sub(22 + name_width).max(4);
+
+    let mut lines: Vec<Line> = Vec::with_capacity(inner_height);
+
+    for (i, g) in app
+        .tag_groups
+        .iter()
+        .skip(scroll)
+        .take(inner_height)
+        .enumerate()
+    {
+        let rank = scroll + i + 1;
+        let label = format!("[{}] ({})", g.tag, g.processes.len());
+        let name = laches::utils::truncate_str(&label, name_width);
+        let padded_name = format!("{:<width$}", name, width = name_width);
+
+        let filled =
+            ((g.total_seconds as f64 / max_secs as f64) * bar_width as f64).round() as usize;
+        let empty = bar_width.saturating_sub(filled);
+        let bar_filled = "\u{2588}".repeat(filled);
+        let bar_empty = "\u{2591}".repeat(empty);
+
+        let duration = laches::utils::format_duration_hm(g.total_seconds);
+        let pct = if total_secs > 0 {
+            (g.total_seconds as f64 / total_secs as f64 * 100.0).round() as u32
+        } else {
+            0
+        };
+
+        lines.push(Line::from(vec![
+            Span::styled(format!(" {:>2}. ", rank), theme.rank_style()),
+            Span::styled(padded_name, Style::default().fg(theme.accent)),
+            Span::raw(" "),
+            Span::styled(bar_filled, Style::default().fg(theme.bar_filled)),
+            Span::styled(bar_empty, Style::default().fg(theme.bar_empty)),
+            Span::raw(format!(" {:>8} ", duration)),
+            Span::styled(format!("{:>3}%", pct), theme.pct_style()),
+        ]));
+    }
+
+    let title = format!(" by tag ({}) ", total_items);
+    let block = Block::default().borders(Borders::ALL).title(title);
+    let para = Paragraph::new(lines).block(block);
+    frame.render_widget(para, area);
+
+    if total_items > inner_height {
+        let mut scrollbar_state =
+            ScrollbarState::new(total_items.saturating_sub(inner_height)).position(scroll);
+        frame.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(None)
+                .end_symbol(None),
+            area.inner(Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
+    }
+}
+
+fn render_footer(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let total_secs: i64 = app.summaries.iter().map(|s| s.total_seconds).sum();
+    let session_count: i64 = app.summaries.iter().map(|s| s.session_count).sum();
+
+    let footer = Paragraph::new(Line::from(vec![Span::styled(
+        format!(
+            " {} processes  |  {} sessions  |  {} total",
+            app.summaries.len(),
+            session_count,
+            laches::utils::format_duration_hm(total_secs),
+        ),
+        theme.key_desc(),
+    )]))
+    .block(Block::default().borders(Borders::ALL));
+    frame.render_widget(footer, area);
 }

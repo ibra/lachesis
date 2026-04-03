@@ -1,6 +1,6 @@
 [package]
 name = "laches"
-version = "0.1.0"
+version = "0.4.0"
 edition = "2021"
 authors = ["Ibrahim Hisham <ibrahim.hisham@proton.me>"]
 license = "MIT"
