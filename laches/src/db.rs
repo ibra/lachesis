@@ -340,7 +340,16 @@ impl Database {
         rows.collect()
     }
 
-    /// List all unique process names that have sessions.
+    pub fn get_all_tags(&self) -> SqlResult<Vec<(String, String)>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT process_name, tag FROM tags ORDER BY tag, process_name")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        rows.collect()
+    }
+
     pub fn get_tracked_processes(&self) -> SqlResult<Vec<String>> {
         let mut stmt = self
             .conn

@@ -11,6 +11,12 @@ use crate::views;
 const TAB_TITLES: [&str; 4] = ["today", "timeline", "trends", "sessions"];
 const TAB_COUNT: usize = TAB_TITLES.len();
 
+pub struct TagGroup {
+    pub tag: String,
+    pub total_seconds: i64,
+    pub processes: Vec<String>,
+}
+
 pub struct App<'a> {
     pub db: &'a Database,
     pub config_dir: PathBuf,
@@ -27,6 +33,8 @@ pub struct App<'a> {
     pub current_process: Option<String>,
     pub daemon_running: bool,
     pub show_help: bool,
+    pub group_by_tag: bool,
+    pub tag_groups: Vec<TagGroup>,
     pub last_error: Option<String>,
 }
 
@@ -46,6 +54,8 @@ impl<'a> App<'a> {
             current_process: None,
             daemon_running: false,
             show_help: false,
+            group_by_tag: false,
+            tag_groups: Vec::new(),
             last_error: None,
         }
     }
@@ -95,6 +105,12 @@ impl<'a> App<'a> {
         self.show_help = !self.show_help;
     }
 
+    pub fn toggle_group_by_tag(&mut self) {
+        self.group_by_tag = !self.group_by_tag;
+        self.scroll_offsets[0] = 0;
+        self.rebuild_tag_groups();
+    }
+
     pub fn scroll_up(&mut self) {
         self.scroll_offsets[self.tab] = self.scroll_offsets[self.tab].saturating_sub(1);
     }
@@ -108,7 +124,13 @@ impl<'a> App<'a> {
 
     fn scrollable_item_count(&self, tab: usize) -> usize {
         match tab {
-            0 => self.summaries.len(),
+            0 => {
+                if self.group_by_tag {
+                    self.tag_groups.len()
+                } else {
+                    self.summaries.len()
+                }
+            }
             3 => self.sessions.iter().filter(|s| !s.idle).count(),
             _ => 0,
         }
@@ -189,6 +211,67 @@ impl<'a> App<'a> {
         };
 
         self.daemon_running = laches::process::is_daemon_running(&self.config_dir);
+        self.rebuild_tag_groups();
+    }
+
+    fn rebuild_tag_groups(&mut self) {
+        self.tag_groups.clear();
+        if !self.group_by_tag {
+            return;
+        }
+
+        let all_tags = self.db.get_all_tags().unwrap_or_default();
+
+        let mut tag_map: std::collections::HashMap<String, (i64, Vec<String>)> =
+            std::collections::HashMap::new();
+
+        let mut tagged_processes: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+
+        for (process_name, tag) in &all_tags {
+            tagged_processes.insert(process_name.clone());
+            if let Some(s) = self
+                .summaries
+                .iter()
+                .find(|s| &s.process_name == process_name)
+            {
+                let entry = tag_map.entry(tag.clone()).or_insert((0, Vec::new()));
+                entry.0 += s.total_seconds;
+                if !entry.1.contains(&s.process_name) {
+                    entry.1.push(s.process_name.clone());
+                }
+            }
+        }
+
+        let mut untagged_secs: i64 = 0;
+        let mut untagged_procs: Vec<String> = Vec::new();
+        for s in &self.summaries {
+            if !tagged_processes.contains(&s.process_name) {
+                untagged_secs += s.total_seconds;
+                untagged_procs.push(s.process_name.clone());
+            }
+        }
+
+        let mut groups: Vec<TagGroup> = tag_map
+            .into_iter()
+            .map(|(tag, (total, procs))| TagGroup {
+                tag,
+                total_seconds: total,
+                processes: procs,
+            })
+            .collect();
+
+        groups.sort_by(|a, b| b.total_seconds.cmp(&a.total_seconds));
+
+        if !untagged_procs.is_empty() {
+            groups.push(TagGroup {
+                tag: "untagged".to_string(),
+                total_seconds: untagged_secs,
+                processes: untagged_procs,
+            });
+        }
+
+        self.tag_groups = groups;
     }
 
     pub fn render(&self, frame: &mut Frame, theme: &Theme) {

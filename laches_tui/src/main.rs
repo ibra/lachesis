@@ -99,6 +99,7 @@ fn run(
                         KeyCode::Right | KeyCode::Char('l') => app.next_day(),
                         KeyCode::Up | KeyCode::Char('k') => app.scroll_up(),
                         KeyCode::Down | KeyCode::Char('j') => app.scroll_down(),
+                        KeyCode::Char('g') => app.toggle_group_by_tag(),
                         KeyCode::Char('r') => app.refresh_data(),
                         _ => {}
                     }
