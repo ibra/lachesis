@@ -7,16 +7,7 @@ use ratatui::{
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     if app.daily_totals.is_empty() || app.daily_totals.iter().all(|(_, v)| *v == 0) {
-        let empty = Paragraph::new(
-            " no trend data available yet. usage will appear here after the first day.",
-        )
-        .style(theme.empty_text())
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" trends (last 30 days) "),
-        );
-        frame.render_widget(empty, area);
+        super::render_empty(app, frame, area, theme, "trends (last 30 days)");
         return;
     }
 

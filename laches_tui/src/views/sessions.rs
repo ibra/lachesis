@@ -2,21 +2,14 @@ use crate::app::App;
 use crate::theme::Theme;
 use ratatui::{
     prelude::*,
-    widgets::{
-        Block, Borders, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState,
-        Table,
-    },
+    widgets::{Block, Borders, Cell, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     let non_idle: Vec<_> = app.sessions.iter().filter(|s| !s.idle).collect();
 
     if non_idle.is_empty() {
-        let empty =
-            Paragraph::new(" no sessions recorded today. start the daemon with `laches start`.")
-                .style(theme.empty_text())
-                .block(Block::default().borders(Borders::ALL).title(" sessions "));
-        frame.render_widget(empty, area);
+        super::render_empty(app, frame, area, theme, "sessions");
         return;
     }
 

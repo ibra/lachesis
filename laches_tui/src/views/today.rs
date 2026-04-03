@@ -18,14 +18,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     render_header(app, frame, chunks[0], theme);
 
     if app.summaries.is_empty() {
-        let empty = Paragraph::new(" no tracked data for this day.")
-            .style(theme.empty_text())
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" top processes "),
-            );
-        frame.render_widget(empty, chunks[1]);
+        super::render_empty(app, frame, chunks[1], theme, "top processes");
     } else {
         render_process_list(app, frame, chunks[1], theme);
     }

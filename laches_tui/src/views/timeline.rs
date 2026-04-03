@@ -18,11 +18,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     let sessions: Vec<_> = app.sessions.iter().filter(|s| !s.idle).collect();
 
     if sessions.is_empty() {
-        let empty =
-            Paragraph::new(" no sessions recorded today. start the daemon with `laches start`.")
-                .style(theme.empty_text())
-                .block(Block::default().borders(Borders::ALL).title(" timeline "));
-        frame.render_widget(empty, area);
+        super::render_empty(app, frame, area, theme, "timeline");
         return;
     }
 
