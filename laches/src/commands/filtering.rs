@@ -1,22 +1,23 @@
+use crate::config::FilterPattern;
 use regex::Regex;
 
 /// Check if a process name matches any pattern in the list.
-/// Supports both exact matches and regex. On windows, exact matches
-/// are case-insensitive since process names are case-insensitive there.
-pub fn matches_any_pattern(process_name: &str, patterns: &[String]) -> bool {
-    for pattern in patterns {
-        if cfg!(windows) {
-            if pattern.eq_ignore_ascii_case(process_name) {
+/// Exact patterns use string comparison (case-insensitive on Windows).
+/// Regex patterns are only applied when explicitly marked as regex.
+pub fn matches_any_pattern(process_name: &str, patterns: &[FilterPattern]) -> bool {
+    for fp in patterns {
+        if fp.is_regex {
+            if let Ok(regex) = Regex::new(&fp.pattern) {
+                if regex.is_match(process_name) {
+                    return true;
+                }
+            }
+        } else if cfg!(windows) {
+            if fp.pattern.eq_ignore_ascii_case(process_name) {
                 return true;
             }
-        } else if pattern == process_name {
+        } else if fp.pattern == process_name {
             return true;
-        }
-
-        if let Ok(regex) = Regex::new(pattern) {
-            if regex.is_match(process_name) {
-                return true;
-            }
         }
     }
     false
@@ -27,11 +28,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_matches_any_pattern_exact_match() {
+    fn test_exact_match() {
         let patterns = vec![
-            "chrome.exe".to_string(),
-            "firefox.exe".to_string(),
-            "notepad.exe".to_string(),
+            FilterPattern::exact("chrome.exe"),
+            FilterPattern::exact("firefox.exe"),
+            FilterPattern::exact("notepad.exe"),
         ];
 
         assert!(matches_any_pattern("chrome.exe", &patterns));
@@ -41,8 +42,21 @@ mod tests {
     }
 
     #[test]
-    fn test_matches_any_pattern_regex() {
-        let patterns = vec![".*chrom.*".to_string(), "^notepad.*".to_string()];
+    fn test_exact_match_does_not_regex() {
+        // "chrome.exe" as an exact pattern should NOT match "chromeXexe"
+        // because the dot is not treated as a regex wildcard
+        let patterns = vec![FilterPattern::exact("chrome.exe")];
+
+        assert!(matches_any_pattern("chrome.exe", &patterns));
+        assert!(!matches_any_pattern("chromeXexe", &patterns));
+    }
+
+    #[test]
+    fn test_regex_match() {
+        let patterns = vec![
+            FilterPattern::regex(".*chrom.*"),
+            FilterPattern::regex("^notepad.*"),
+        ];
 
         assert!(matches_any_pattern("chrome", &patterns));
         assert!(matches_any_pattern("google-chrome", &patterns));
@@ -53,32 +67,39 @@ mod tests {
     }
 
     #[test]
-    fn test_matches_any_pattern_mixed() {
-        let patterns = vec!["chrome.exe".to_string(), ".*firefox.*".to_string()];
+    fn test_mixed_exact_and_regex() {
+        let patterns = vec![
+            FilterPattern::exact("chrome.exe"),
+            FilterPattern::regex(".*firefox.*"),
+        ];
 
         assert!(matches_any_pattern("chrome.exe", &patterns));
         assert!(matches_any_pattern("firefox", &patterns));
         assert!(matches_any_pattern("mozilla-firefox", &patterns));
+        // exact "chrome.exe" should NOT match plain "chrome"
         assert!(!matches_any_pattern("chrome", &patterns));
     }
 
     #[test]
-    fn test_matches_any_pattern_empty() {
-        let patterns: Vec<String> = vec![];
+    fn test_empty_patterns() {
+        let patterns: Vec<FilterPattern> = vec![];
         assert!(!matches_any_pattern("anything", &patterns));
     }
 
     #[test]
-    fn test_matches_any_pattern_invalid_regex() {
-        let patterns = vec!["[invalid".to_string(), "valid.exe".to_string()];
+    fn test_invalid_regex_is_skipped() {
+        let patterns = vec![
+            FilterPattern::regex("[invalid"),
+            FilterPattern::exact("valid.exe"),
+        ];
 
         assert!(!matches_any_pattern("invalid", &patterns));
         assert!(matches_any_pattern("valid.exe", &patterns));
     }
 
     #[test]
-    fn test_matches_any_pattern_case_handling() {
-        let patterns = vec!["Chrome.exe".to_string()];
+    fn test_case_handling() {
+        let patterns = vec![FilterPattern::exact("Chrome.exe")];
 
         assert!(matches_any_pattern("Chrome.exe", &patterns));
         if cfg!(windows) {
@@ -89,10 +110,10 @@ mod tests {
     }
 
     #[test]
-    fn test_matches_any_pattern_complex_regex() {
+    fn test_complex_regex() {
         let patterns = vec![
-            r"^(chrome|firefox|edge)\.exe$".to_string(),
-            r"\d+".to_string(),
+            FilterPattern::regex(r"^(chrome|firefox|edge)\.exe$"),
+            FilterPattern::regex(r"\d+"),
         ];
 
         assert!(matches_any_pattern("chrome.exe", &patterns));

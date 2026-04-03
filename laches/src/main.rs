@@ -1,9 +1,9 @@
 use clap::Parser;
 use colored::Colorize;
 use laches::{
-    cli::{AutostartToggle, Cli, Commands, ConfigAction, DataAction, FilterMode},
+    cli::{AutostartToggle, Cli, Commands, ConfigAction, DataAction},
     commands::autostart::handle_autostart,
-    config::{get_machine_id, load_or_create_config, save_config},
+    config::{get_machine_id, load_or_create_config, save_config, FilterPattern},
     db::{date_range_for_day, last_n_days_range, today_range, Database},
     process::{start_monitoring, stop_monitoring},
     utils::format_uptime,
@@ -108,12 +108,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         Commands::Mode { mode } => {
-            config.filtering.mode = match mode {
-                FilterMode::Whitelist => "whitelist",
-                FilterMode::Blacklist => "blacklist",
-                FilterMode::Default => "default",
-            }
-            .to_string();
+            config.filtering.mode = mode.clone().into();
             save_config(&config, &config_dir)?;
             println!("filtering mode set to '{}'", config.filtering.mode);
             Ok(())
@@ -141,10 +136,22 @@ fn main() -> Result<(), Box<dyn Error>> {
                 println!("  filter mode: {}", config.filtering.mode);
 
                 if !config.filtering.whitelist.is_empty() {
-                    println!("  whitelist: {}", config.filtering.whitelist.join(", "));
+                    let patterns: Vec<String> = config
+                        .filtering
+                        .whitelist
+                        .iter()
+                        .map(|p| p.to_string())
+                        .collect();
+                    println!("  whitelist: {}", patterns.join(", "));
                 }
                 if !config.filtering.blacklist.is_empty() {
-                    println!("  blacklist: {}", config.filtering.blacklist.join(", "));
+                    let patterns: Vec<String> = config
+                        .filtering
+                        .blacklist
+                        .iter()
+                        .map(|p| p.to_string())
+                        .collect();
+                    println!("  blacklist: {}", patterns.join(", "));
                 }
 
                 let data_dir = laches::config::data_dir(&config_dir);
@@ -255,16 +262,21 @@ fn handle_filter_list_action(
             if *regex {
                 regex::Regex::new(process).map_err(|e| format!("error: invalid regex: {}", e))?;
             }
-            if !list.contains(process) {
-                list.push(process.clone());
+            let pattern = if *regex {
+                FilterPattern::regex(process)
+            } else {
+                FilterPattern::exact(process)
+            };
+            if list.iter().any(|p| p.pattern == pattern.pattern) {
+                println!("'{}' is already in {}", process, list_name);
+            } else {
+                list.push(pattern);
                 save_config(config, config_dir)?;
                 println!("added '{}' to {}", process, list_name);
-            } else {
-                println!("'{}' is already in {}", process, list_name);
             }
         }
         laches::cli::FilterListAction::Remove { process } => {
-            if let Some(pos) = list.iter().position(|p| p == process) {
+            if let Some(pos) = list.iter().position(|p| p.pattern == *process) {
                 list.remove(pos);
                 save_config(config, config_dir)?;
                 println!("removed '{}' from {}", process, list_name);

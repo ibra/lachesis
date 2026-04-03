@@ -1,3 +1,4 @@
+use crate::config::FilterMode;
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
@@ -95,7 +96,7 @@ pub enum Commands {
     /// set the filtering mode
     Mode {
         /// filtering mode to use
-        mode: FilterMode,
+        mode: CliFilterMode,
     },
 
     /// enable or disable autostart on login
@@ -182,11 +183,24 @@ pub enum FilterListAction {
     Clear,
 }
 
+/// CLI-level filter mode (maps to config::FilterMode).
+/// Separate from config::FilterMode because clap's ValueEnum derive
+/// requires a different set of traits than serde.
 #[derive(Clone, ValueEnum)]
-pub enum FilterMode {
+pub enum CliFilterMode {
     Whitelist,
     Blacklist,
     Default,
+}
+
+impl From<CliFilterMode> for FilterMode {
+    fn from(m: CliFilterMode) -> Self {
+        match m {
+            CliFilterMode::Whitelist => FilterMode::Whitelist,
+            CliFilterMode::Blacklist => FilterMode::Blacklist,
+            CliFilterMode::Default => FilterMode::Default,
+        }
+    }
 }
 
 #[derive(Clone, ValueEnum)]
