@@ -4,6 +4,9 @@ use std::path::Path;
 
 const SCHEMA_VERSION: i32 = 1;
 
+/// Timestamp format used for all session start/end times in the database.
+pub const TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H:%M:%S";
+
 /// A recorded session of focused window usage.
 #[derive(Debug, Clone)]
 pub struct Session {
@@ -250,6 +253,29 @@ impl Database {
         )?;
 
         let rows = stmt.query_map(params![start_date, end_date], map_session_row)?;
+        rows.collect()
+    }
+
+    /// Get daily active totals for a date range, returned as (date_label, seconds) pairs.
+    /// Uses a single aggregated query instead of per-day lookups.
+    pub fn query_daily_totals(
+        &self,
+        start_date: &str,
+        end_date: &str,
+    ) -> SqlResult<Vec<(String, i64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT date(start_time) as day,
+                    COALESCE(SUM(CAST(ROUND((julianday(COALESCE(end_time, datetime('now', 'localtime'))) - julianday(start_time)) * 86400) AS INTEGER)), 0)
+             FROM sessions
+             WHERE start_time >= ?1 AND start_time < ?2 AND idle = 0
+             GROUP BY day
+             ORDER BY day",
+        )?;
+
+        let rows = stmt.query_map(params![start_date, end_date], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?;
+
         rows.collect()
     }
 

@@ -90,17 +90,29 @@ impl<'a> App<'a> {
             .query_total_idle_seconds(&today_start, &today_end)
             .unwrap_or(0);
 
-        // daily totals for the last 30 days
+        // daily totals for the last 30 days (single aggregated query)
         self.daily_totals.clear();
         let today = chrono::Local::now().date_naive();
+        let start_day = today - chrono::Duration::days(29);
+        let (range_start, _) =
+            laches::db::date_range_for_day(&start_day.format("%Y-%m-%d").to_string())
+                .unwrap_or_default();
+        let (_, range_end) = laches::db::date_range_for_day(&today.format("%Y-%m-%d").to_string())
+            .unwrap_or_default();
+
+        let db_totals: std::collections::HashMap<String, i64> = self
+            .db
+            .query_daily_totals(&range_start, &range_end)
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+
         for i in (0..30).rev() {
             let date = today - chrono::Duration::days(i);
-            let date_str = date.format("%Y-%m-%d").to_string();
-            if let Some((s, e)) = laches::db::date_range_for_day(&date_str) {
-                let total = self.db.query_total_active_seconds(&s, &e).unwrap_or(0);
-                self.daily_totals
-                    .push((date.format("%m/%d").to_string(), total));
-            }
+            let date_key = date.format("%Y-%m-%d").to_string();
+            let total = db_totals.get(&date_key).copied().unwrap_or(0);
+            self.daily_totals
+                .push((date.format("%m/%d").to_string(), total));
         }
 
         // current process (open session)
