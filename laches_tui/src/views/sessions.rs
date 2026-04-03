@@ -32,16 +32,9 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
                 .unwrap_or("now");
 
             let duration = if let Some(ref et) = s.end_time {
-                let st = chrono::NaiveDateTime::parse_from_str(
-                    &s.start_time,
-                    laches::db::TIMESTAMP_FORMAT,
-                );
-                let en = chrono::NaiveDateTime::parse_from_str(et, laches::db::TIMESTAMP_FORMAT);
-                if let (Ok(st), Ok(en)) = (st, en) {
-                    let secs = (en - st).num_seconds().max(0);
-                    laches::utils::format_duration_short(secs)
-                } else {
-                    "?".to_string()
+                match laches::utils::session_duration_secs(&s.start_time, et) {
+                    Some(secs) => laches::utils::format_duration_short(secs),
+                    None => "?".to_string(),
                 }
             } else {
                 "\u{25cf} active".to_string()

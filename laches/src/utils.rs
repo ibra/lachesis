@@ -58,6 +58,12 @@ pub fn format_uptime(seconds: u64) -> String {
     }
 }
 
+pub fn session_duration_secs(start_time: &str, end_time: &str) -> Option<i64> {
+    let st = chrono::NaiveDateTime::parse_from_str(start_time, crate::db::TIMESTAMP_FORMAT).ok()?;
+    let en = chrono::NaiveDateTime::parse_from_str(end_time, crate::db::TIMESTAMP_FORMAT).ok()?;
+    Some((en - st).num_seconds().max(0))
+}
+
 pub fn confirm(prompt: &str) -> bool {
     print!("{}", prompt);
     io::stdout().flush().unwrap();
