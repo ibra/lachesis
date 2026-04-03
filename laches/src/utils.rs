@@ -1,5 +1,17 @@
 use std::io::{self, Write};
 
+/// Truncate a string to at most `max_chars` characters, appending "..." if truncated.
+/// Safe for multi-byte UTF-8 strings (never panics on char boundaries).
+pub fn truncate_str(s: &str, max_chars: usize) -> String {
+    let char_count = s.chars().count();
+    if char_count <= max_chars {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max_chars.saturating_sub(3)).collect();
+        format!("{}...", truncated)
+    }
+}
+
 pub fn format_uptime(seconds: u64) -> String {
     let days = seconds / 86400;
     let hours = (seconds % 86400) / 3600;
@@ -77,5 +89,34 @@ mod tests {
         // 100 days, 12 hours, 34 minutes, 56 seconds
         let complex = 100 * 86400 + 12 * 3600 + 34 * 60 + 56;
         assert_eq!(format_uptime(complex), "100d 12h 34m 56s");
+    }
+
+    #[test]
+    fn test_truncate_str_short() {
+        assert_eq!(truncate_str("hello", 10), "hello");
+        assert_eq!(truncate_str("hello", 5), "hello");
+    }
+
+    #[test]
+    fn test_truncate_str_exact_boundary() {
+        assert_eq!(truncate_str("abcde", 5), "abcde");
+    }
+
+    #[test]
+    fn test_truncate_str_long() {
+        assert_eq!(truncate_str("hello world, this is long", 10), "hello w...");
+    }
+
+    #[test]
+    fn test_truncate_str_multibyte_utf8() {
+        // emoji and CJK characters are multi-byte in UTF-8
+        let s = "日本語テスト文字列です";
+        let result = truncate_str(s, 6);
+        assert_eq!(result, "日本語...");
+    }
+
+    #[test]
+    fn test_truncate_str_empty() {
+        assert_eq!(truncate_str("", 5), "");
     }
 }

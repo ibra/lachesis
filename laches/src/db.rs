@@ -91,10 +91,12 @@ impl Database {
             )?;
         }
 
-        assert!(
-            version <= SCHEMA_VERSION,
-            "database is from a newer version of lachesis"
-        );
+        if version > SCHEMA_VERSION {
+            return Err(rusqlite::Error::InvalidParameterName(format!(
+                "database schema version {} is newer than supported version {}. update lachesis to open this database",
+                version, SCHEMA_VERSION
+            )));
+        }
 
         Ok(())
     }

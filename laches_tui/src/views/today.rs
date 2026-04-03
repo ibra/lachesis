@@ -50,11 +50,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .take(15)
         .map(|s| {
             let minutes = (s.total_seconds / 60).max(1) as u64;
-            let label = if s.process_name.len() > 18 {
-                format!("{}...", &s.process_name[..15])
-            } else {
-                s.process_name.clone()
-            };
+            let label = laches::utils::truncate_str(&s.process_name, 18);
             Bar::default()
                 .value(minutes)
                 .label(Line::from(label))

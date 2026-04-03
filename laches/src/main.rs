@@ -10,9 +10,6 @@ use laches::{
 };
 use std::error::Error;
 
-#[allow(unused_imports)]
-use chrono::NaiveDateTime;
-
 fn main() -> Result<(), Box<dyn Error>> {
     let config_dir = match dirs::config_dir() {
         Some(dir) => dir.join("lachesis"),
@@ -470,11 +467,7 @@ fn print_sessions(
         };
 
         let title = s.window_title.as_deref().unwrap_or("");
-        let title_display = if title.len() > 40 {
-            format!("{}...", &title[..37])
-        } else {
-            title.to_string()
-        };
+        let title_display = laches::utils::truncate_str(title, 40);
 
         println!(
             "  {}-{}  {:<22} {:>8}  {}",
