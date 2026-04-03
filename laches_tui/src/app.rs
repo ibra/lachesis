@@ -7,11 +7,15 @@ use ratatui::{
 use crate::views;
 
 const TAB_TITLES: [&str; 4] = ["today", "timeline", "trends", "sessions"];
+const TAB_COUNT: usize = TAB_TITLES.len();
 
 pub struct App<'a> {
     pub db: &'a Database,
     pub tab: usize,
-    pub scroll: usize,
+
+    /// Per-view scroll offsets, indexed by tab number.
+    /// Each view manages its own scroll position independently.
+    pub scroll_offsets: [usize; TAB_COUNT],
 
     // cached data (refreshed periodically)
     pub today_summaries: Vec<ProcessSummary>,
@@ -27,7 +31,7 @@ impl<'a> App<'a> {
         Self {
             db,
             tab: 0,
-            scroll: 0,
+            scroll_offsets: [0; TAB_COUNT],
             today_summaries: Vec::new(),
             today_sessions: Vec::new(),
             today_active: 0,
@@ -38,32 +42,29 @@ impl<'a> App<'a> {
     }
 
     pub fn set_tab(&mut self, tab: usize) {
-        if tab < TAB_TITLES.len() {
+        if tab < TAB_COUNT {
             self.tab = tab;
-            self.scroll = 0;
         }
     }
 
     pub fn next_tab(&mut self) {
-        self.tab = (self.tab + 1) % TAB_TITLES.len();
-        self.scroll = 0;
+        self.tab = (self.tab + 1) % TAB_COUNT;
     }
 
     pub fn prev_tab(&mut self) {
         self.tab = if self.tab == 0 {
-            TAB_TITLES.len() - 1
+            TAB_COUNT - 1
         } else {
             self.tab - 1
         };
-        self.scroll = 0;
     }
 
     pub fn scroll_up(&mut self) {
-        self.scroll = self.scroll.saturating_sub(1);
+        self.scroll_offsets[self.tab] = self.scroll_offsets[self.tab].saturating_sub(1);
     }
 
     pub fn scroll_down(&mut self) {
-        self.scroll = self.scroll.saturating_add(1);
+        self.scroll_offsets[self.tab] = self.scroll_offsets[self.tab].saturating_add(1);
     }
 
     pub fn refresh_data(&mut self) {
