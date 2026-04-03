@@ -4,8 +4,11 @@ use std::path::Path;
 
 const SCHEMA_VERSION: i32 = 1;
 
-/// Timestamp format used for all session start/end times in the database.
 pub const TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H:%M:%S";
+
+const DURATION_SECS_SQL: &str = "CAST(ROUND((julianday(COALESCE(end_time, datetime('now', 'localtime'))) - julianday(start_time)) * 86400) AS INTEGER)";
+
+const DURATION_SECS_SQL_PREFIXED: &str = "CAST(ROUND((julianday(COALESCE(s.end_time, datetime('now', 'localtime'))) - julianday(s.start_time)) * 86400) AS INTEGER)";
 
 /// A recorded session of focused window usage.
 #[derive(Debug, Clone)]
@@ -179,29 +182,35 @@ impl Database {
         tag_filter: Option<&str>,
     ) -> SqlResult<Vec<ProcessSummary>> {
         let query = if tag_filter.is_some() {
-            "SELECT s.process_name,
-                    SUM(CAST(ROUND((julianday(COALESCE(s.end_time, datetime('now', 'localtime'))) - julianday(s.start_time)) * 86400) AS INTEGER)) as total_seconds,
-                    COUNT(*) as session_count,
-                    COUNT(DISTINCT date(s.start_time)) as active_days
-             FROM sessions s
-             JOIN tags t ON s.process_name = t.process_name
-             WHERE s.start_time >= ?1 AND s.start_time < ?2
-               AND s.idle = 0 AND t.tag = ?3
-             GROUP BY s.process_name
-             ORDER BY total_seconds DESC"
+            format!(
+                "SELECT s.process_name,
+                        SUM({}) as total_seconds,
+                        COUNT(*) as session_count,
+                        COUNT(DISTINCT date(s.start_time)) as active_days
+                 FROM sessions s
+                 JOIN tags t ON s.process_name = t.process_name
+                 WHERE s.start_time >= ?1 AND s.start_time < ?2
+                   AND s.idle = 0 AND t.tag = ?3
+                 GROUP BY s.process_name
+                 ORDER BY total_seconds DESC",
+                DURATION_SECS_SQL_PREFIXED
+            )
         } else {
-            "SELECT process_name,
-                    SUM(CAST(ROUND((julianday(COALESCE(end_time, datetime('now', 'localtime'))) - julianday(start_time)) * 86400) AS INTEGER)) as total_seconds,
-                    COUNT(*) as session_count,
-                    COUNT(DISTINCT date(start_time)) as active_days
-             FROM sessions
-             WHERE start_time >= ?1 AND start_time < ?2
-               AND idle = 0
-             GROUP BY process_name
-             ORDER BY total_seconds DESC"
+            format!(
+                "SELECT process_name,
+                        SUM({}) as total_seconds,
+                        COUNT(*) as session_count,
+                        COUNT(DISTINCT date(start_time)) as active_days
+                 FROM sessions
+                 WHERE start_time >= ?1 AND start_time < ?2
+                   AND idle = 0
+                 GROUP BY process_name
+                 ORDER BY total_seconds DESC",
+                DURATION_SECS_SQL
+            )
         };
 
-        let mut stmt = self.conn.prepare(query)?;
+        let mut stmt = self.conn.prepare(&query)?;
 
         let map_row = |row: &rusqlite::Row| -> SqlResult<ProcessSummary> {
             Ok(ProcessSummary {
@@ -223,24 +232,24 @@ impl Database {
 
     /// Get total active (non-idle) seconds for a date range.
     pub fn query_total_active_seconds(&self, start_date: &str, end_date: &str) -> SqlResult<i64> {
-        self.conn.query_row(
-            "SELECT COALESCE(SUM(CAST(ROUND((julianday(COALESCE(end_time, datetime('now', 'localtime'))) - julianday(start_time)) * 86400) AS INTEGER)), 0)
-             FROM sessions
+        let sql = format!(
+            "SELECT COALESCE(SUM({}), 0) FROM sessions \
              WHERE start_time >= ?1 AND start_time < ?2 AND idle = 0",
-            params![start_date, end_date],
-            |row| row.get(0),
-        )
+            DURATION_SECS_SQL
+        );
+        self.conn
+            .query_row(&sql, params![start_date, end_date], |row| row.get(0))
     }
 
     /// Get total idle seconds for a date range.
     pub fn query_total_idle_seconds(&self, start_date: &str, end_date: &str) -> SqlResult<i64> {
-        self.conn.query_row(
-            "SELECT COALESCE(SUM(CAST(ROUND((julianday(COALESCE(end_time, datetime('now', 'localtime'))) - julianday(start_time)) * 86400) AS INTEGER)), 0)
-             FROM sessions
+        let sql = format!(
+            "SELECT COALESCE(SUM({}), 0) FROM sessions \
              WHERE start_time >= ?1 AND start_time < ?2 AND idle = 1",
-            params![start_date, end_date],
-            |row| row.get(0),
-        )
+            DURATION_SECS_SQL
+        );
+        self.conn
+            .query_row(&sql, params![start_date, end_date], |row| row.get(0))
     }
 
     /// Get individual sessions for a date range.
@@ -263,14 +272,14 @@ impl Database {
         start_date: &str,
         end_date: &str,
     ) -> SqlResult<Vec<(String, i64)>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT date(start_time) as day,
-                    COALESCE(SUM(CAST(ROUND((julianday(COALESCE(end_time, datetime('now', 'localtime'))) - julianday(start_time)) * 86400) AS INTEGER)), 0)
-             FROM sessions
-             WHERE start_time >= ?1 AND start_time < ?2 AND idle = 0
-             GROUP BY day
-             ORDER BY day",
-        )?;
+        let sql = format!(
+            "SELECT date(start_time) as day, COALESCE(SUM({}), 0) \
+             FROM sessions \
+             WHERE start_time >= ?1 AND start_time < ?2 AND idle = 0 \
+             GROUP BY day ORDER BY day",
+            DURATION_SECS_SQL
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
 
         let rows = stmt.query_map(params![start_date, end_date], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
