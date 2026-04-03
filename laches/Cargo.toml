@@ -7,13 +7,15 @@ license = "MIT"
 
 [dependencies]
 auto-launch.workspace = true
+chrono.workspace = true
 clap.workspace = true
 regex.workspace = true
+rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 uuid.workspace = true
 
-chrono = { version = "0.4", features = ["serde"] }
 colored = "2.1"
 dirs = "5.0.1"
 sysinfo = "0.30.13"
