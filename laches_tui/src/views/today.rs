@@ -11,9 +11,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .split(area);
 
     // header with total time and current process
-    let active = format_duration(app.today_active);
+    let active = laches::utils::format_duration_hm(app.today_active);
     let idle = if app.today_idle > 0 {
-        format!("  idle: {}", format_duration(app.today_idle))
+        format!(
+            "  idle: {}",
+            laches::utils::format_duration_hm(app.today_idle)
+        )
     } else {
         String::new()
     };
@@ -72,14 +75,4 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .value_style(Style::default().fg(Color::White).bold());
 
     frame.render_widget(chart, chunks[1]);
-}
-
-fn format_duration(seconds: i64) -> String {
-    let h = seconds / 3600;
-    let m = (seconds % 3600) / 60;
-    if h > 0 {
-        format!("{}h {}m", h, m)
-    } else {
-        format!("{}m", m)
-    }
 }

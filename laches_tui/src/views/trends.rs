@@ -61,22 +61,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
 
     let stats = Paragraph::new(Line::from(vec![Span::raw(format!(
         "  avg: {}  |  peak: {}  |  active: {}/{} days",
-        format_duration(avg_secs),
-        format_duration(max_secs),
+        laches::utils::format_duration_hm(avg_secs),
+        laches::utils::format_duration_hm(max_secs),
         active_days,
         total_days,
     ))]))
     .block(Block::default().borders(Borders::ALL));
 
     frame.render_widget(stats, chunks[1]);
-}
-
-fn format_duration(seconds: i64) -> String {
-    let h = seconds / 3600;
-    let m = (seconds % 3600) / 60;
-    if h > 0 {
-        format!("{}h {}m", h, m)
-    } else {
-        format!("{}m", m)
-    }
 }

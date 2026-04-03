@@ -35,7 +35,7 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
                 let en = chrono::NaiveDateTime::parse_from_str(et, "%Y-%m-%dT%H:%M:%S");
                 if let (Ok(st), Ok(en)) = (st, en) {
                     let secs = (en - st).num_seconds().max(0);
-                    format_duration(secs)
+                    laches::utils::format_duration_short(secs)
                 } else {
                     "?".to_string()
                 }
@@ -91,17 +91,4 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .block(Block::default().borders(Borders::ALL).title(scroll_info));
 
     frame.render_widget(table, area);
-}
-
-fn format_duration(seconds: i64) -> String {
-    let h = seconds / 3600;
-    let m = (seconds % 3600) / 60;
-    let s = seconds % 60;
-    if h > 0 {
-        format!("{}h {}m", h, m)
-    } else if m > 0 {
-        format!("{}m {}s", m, s)
-    } else {
-        format!("{}s", s)
-    }
 }
