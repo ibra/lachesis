@@ -1,4 +1,4 @@
-use crate::store::{LachesStore, Process, STORE_NAME};
+use crate::store::{normalize_process_name, LachesStore, Process, STORE_NAME};
 use std::env;
 use std::process::Stdio;
 use std::{error::Error, path::Path, process::Command};
@@ -84,15 +84,20 @@ pub fn get_active_processes() -> Vec<Process> {
     let system = System::new_all();
 
     for process in system.processes().values() {
-        let name = process.name().to_string();
+        let raw_name = process.name().to_string();
+        let title = normalize_process_name(&raw_name);
 
-        let contains_title = active_processes.iter().any(|window| window.title == name);
-
-        if name.trim() == "" || contains_title {
+        if title.trim().is_empty() {
             continue;
         }
 
-        active_processes.push(Process::new(name));
+        let already_tracked = active_processes.iter().any(|p| p.title == title);
+        if already_tracked {
+            continue;
+        }
+
+        let exe_path = process.exe().map(|p| p.to_string_lossy().to_string());
+        active_processes.push(Process::with_exe_path(title, exe_path));
     }
     active_processes
 }
