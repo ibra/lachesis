@@ -148,4 +148,41 @@ mod tests {
     fn test_truncate_str_empty() {
         assert_eq!(truncate_str("", 5), "");
     }
+
+    #[test]
+    fn test_format_duration_short_seconds() {
+        assert_eq!(format_duration_short(0), "0s");
+        assert_eq!(format_duration_short(45), "45s");
+    }
+
+    #[test]
+    fn test_format_duration_short_minutes() {
+        assert_eq!(format_duration_short(90), "1m 30s");
+        assert_eq!(format_duration_short(3599), "59m 59s");
+    }
+
+    #[test]
+    fn test_format_duration_short_hours() {
+        assert_eq!(format_duration_short(3600), "1h 0m");
+        assert_eq!(format_duration_short(7260), "2h 1m");
+    }
+
+    #[test]
+    fn test_format_duration_short_negative() {
+        // negative values should be clamped to 0
+        assert_eq!(format_duration_short(-100), "0s");
+    }
+
+    #[test]
+    fn test_format_duration_hm_minutes() {
+        assert_eq!(format_duration_hm(0), "0m");
+        assert_eq!(format_duration_hm(90), "1m");
+        assert_eq!(format_duration_hm(3599), "59m");
+    }
+
+    #[test]
+    fn test_format_duration_hm_hours() {
+        assert_eq!(format_duration_hm(3600), "1h 0m");
+        assert_eq!(format_duration_hm(7260), "2h 1m");
+    }
 }
