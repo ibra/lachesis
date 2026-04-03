@@ -1,4 +1,5 @@
 mod app;
+mod renderer;
 mod theme;
 mod views;
 
@@ -71,7 +72,7 @@ fn run(
     app.refresh_data();
 
     loop {
-        terminal.draw(|f| app.render(f, theme))?;
+        terminal.draw(|f| renderer::render(app, f, theme))?;
 
         // poll for events with a timeout so we can refresh data periodically
         if event::poll(Duration::from_secs(5))? {
