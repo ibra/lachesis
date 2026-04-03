@@ -12,8 +12,10 @@ use uuid::Uuid;
 
 use crate::process_list::ProcessListOptions;
 
+/// Filename for the JSON store on disk.
 pub const STORE_NAME: &str = "store.json";
 
+/// A tracked process with daily usage data, tags, and last-seen date.
 #[derive(Deserialize, Serialize, Clone, Tabled)]
 pub struct Process {
     pub title: String,
@@ -110,13 +112,17 @@ impl Process {
     }
 }
 
+/// Top-level data store persisted to disk as JSON.
+///
+/// Contains daemon state, per-machine process data, and filtering options.
+/// Machine data is keyed by a stable machine id (`{hostname}_{uuid}`) to
+/// support cross-machine aggregation when the store file is synced.
 #[derive(Deserialize, Serialize)]
 pub struct LachesStore {
     pub daemon_pid: u32,
-    pub autostart: bool,      // whether the program runs on startup (yes/no)
-    pub update_interval: u64, // how often the list of windows gets updated (seconds)
+    pub autostart: bool,
+    pub update_interval: u64,
 
-    // Per-machine process data - key is hostname, value is list of processes for that machine
     #[serde(default)]
     pub machine_data: HashMap<String, Vec<Process>>,
 

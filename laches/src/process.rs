@@ -1,6 +1,6 @@
 use crate::store::{LachesStore, Process, STORE_NAME};
 use std::env;
-use std::mem;
+use std::process::Stdio;
 use std::{error::Error, path::Path, process::Command};
 use sysinfo::{Pid, System};
 
@@ -33,22 +33,26 @@ pub fn start_monitoring(
     exe_path.pop();
     exe_path.push("laches_mon");
 
-    let mut monitor = Command::new(&exe_path);
-    monitor
+    let instance = Command::new(&exe_path)
         .arg(laches_store.update_interval.to_string())
-        .arg(store_path.join(STORE_NAME));
-
-    let instance = monitor.spawn().map_err(|e| {
-        format!(
-            "error: failed to start laches_mon at '{}': {}",
-            exe_path.display(),
-            e
-        )
-    })?;
+        .arg(store_path.join(STORE_NAME))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| {
+            format!(
+                "error: failed to start laches_mon at '{}': {}",
+                exe_path.display(),
+                e
+            )
+        })?;
 
     let pid = instance.id();
     laches_store.daemon_pid = pid;
-    mem::forget(instance);
+    // child handle is dropped here - on both windows and unix this does NOT
+    // kill the child process, it just releases our handle to it
+    drop(instance);
 
     println!("info: started laches_mon daemon (pid: {})", pid);
 
