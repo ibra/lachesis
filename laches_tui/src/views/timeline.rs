@@ -1,48 +1,40 @@
 use crate::app::App;
+use crate::theme::Theme;
+use chrono::Timelike;
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Paragraph},
 };
 
-/// Color palette for process timeline blocks.
-const PALETTE: [Color; 8] = [
-    Color::Cyan,
-    Color::Green,
-    Color::Yellow,
-    Color::Magenta,
-    Color::Blue,
-    Color::Red,
-    Color::LightCyan,
-    Color::LightGreen,
-];
-
 use laches::db::TIMESTAMP_FORMAT;
 
-/// Parsed session with pre-computed timestamps for efficient timeline rendering.
 struct TimelineEntry {
     process_name: String,
     start: chrono::NaiveDateTime,
     end: chrono::NaiveDateTime,
 }
 
-pub fn render(app: &App, frame: &mut Frame, area: Rect) {
-    let sessions: Vec<_> = app.today_sessions.iter().filter(|s| !s.idle).collect();
+pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let sessions: Vec<_> = app.sessions.iter().filter(|s| !s.idle).collect();
 
     if sessions.is_empty() {
-        let empty =
-            Paragraph::new(" no sessions recorded today. start the daemon with `laches start`.")
-                .style(Style::default().fg(Color::DarkGray))
-                .block(Block::default().borders(Borders::ALL).title(" timeline "));
-        frame.render_widget(empty, area);
+        super::render_empty(app, frame, area, theme, "timeline");
         return;
     }
 
-    let now = chrono::Local::now().naive_local();
+    let now = if app.is_viewing_today() {
+        chrono::Local::now().naive_local()
+    } else {
+        app.viewing_date
+            .succ_opt()
+            .unwrap_or(app.viewing_date)
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+    };
 
-    // parse all session timestamps once upfront
     let entries: Vec<TimelineEntry> = sessions
         .iter()
-        .rev() // chronological order
+        .rev()
         .filter_map(|s| {
             let start =
                 chrono::NaiveDateTime::parse_from_str(&s.start_time, TIMESTAMP_FORMAT).ok()?;
@@ -63,38 +55,34 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         return;
     }
 
-    // build color map using Vec to preserve insertion order (deterministic legend)
     let mut color_map: Vec<(String, Color)> = Vec::new();
     for entry in &entries {
         if !color_map
             .iter()
             .any(|(name, _)| name == &entry.process_name)
         {
-            let color = PALETTE[color_map.len() % PALETTE.len()];
+            let color = theme.palette[color_map.len() % theme.palette.len()];
             color_map.push((entry.process_name.clone(), color));
         }
     }
 
-    // compute legend height dynamically based on content
     let legend_items_per_row = |width: usize| -> usize {
-        // each legend item: "█ name  " ~= name.len() + 4
         if width == 0 {
             return 1;
         }
-        let avg_item_width = 16; // reasonable average
+        let avg_item_width = 16;
         (width / avg_item_width).max(1)
     };
     let inner_w = area.width.saturating_sub(2) as usize;
     let items_per_row = legend_items_per_row(inner_w);
     let legend_rows = color_map.len().div_ceil(items_per_row).max(1);
-    let legend_height = (legend_rows as u16 + 2).min(area.height.saturating_sub(5)); // +2 for borders
+    let legend_height = (legend_rows as u16 + 2).min(area.height.saturating_sub(5));
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(3), Constraint::Length(legend_height)])
         .split(area);
 
-    // --- timeline rendering ---
     let inner_width = chunks[0].width.saturating_sub(2) as usize;
     if inner_width == 0 {
         return;
@@ -103,7 +91,6 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let range_start = entries.first().map(|e| e.start).unwrap();
     let range_secs = (now - range_start).num_seconds().max(1) as f64;
 
-    // pre-compute: for each column, find the session index (O(entries) total)
     let mut col_colors: Vec<Option<Color>> = vec![None; inner_width];
     for entry in &entries {
         let color = color_map
@@ -128,29 +115,78 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         }
     }
 
-    // build timeline spans from pre-computed array
-    let timeline_spans: Vec<Span> = col_colors
+    let bar_row: Vec<Span> = col_colors
         .iter()
         .map(|c| match c {
             Some(color) => Span::styled("\u{2588}", Style::default().fg(*color)),
-            None => Span::styled("\u{2591}", Style::default().fg(Color::DarkGray)),
+            None => Span::styled(" ", Style::default().fg(theme.muted)),
         })
         .collect();
 
-    // time axis labels — exact alignment
+    let fill_height = chunks[0].height.saturating_sub(2) as usize;
+    let bar_rows = fill_height.saturating_sub(1).clamp(1, 3);
+
+    let mut lines: Vec<Line> = Vec::new();
+    for _ in 0..bar_rows {
+        lines.push(Line::from(bar_row.clone()));
+    }
+
     let start_label = range_start.format("%H:%M").to_string();
     let end_label = now.format("%H:%M").to_string();
-    let gap = inner_width.saturating_sub(start_label.len() + end_label.len());
-    let axis_line = Line::from(vec![
-        Span::styled(start_label, Style::default().fg(Color::DarkGray)),
-        Span::raw(" ".repeat(gap)),
-        Span::styled(end_label, Style::default().fg(Color::DarkGray)),
-    ]);
 
-    let mut lines = vec![Line::from(timeline_spans), axis_line];
+    let total_hours = (range_secs / 3600.0).ceil() as usize;
+    let mut hour_markers: Vec<(usize, String)> = Vec::new();
+    if total_hours > 1 {
+        let first_hour = range_start.time().hour() + 1;
+        for h in 0..total_hours {
+            let hour = (first_hour + h as u32) % 24;
+            let hour_time = range_start.date().and_hms_opt(hour, 0, 0);
+            if let Some(ht) = hour_time {
+                let secs_from_start = (ht - range_start).num_seconds();
+                if secs_from_start > 0 && (secs_from_start as f64) < range_secs {
+                    let col =
+                        (secs_from_start as f64 / range_secs * inner_width as f64).round() as usize;
+                    if col > 0 && col < inner_width.saturating_sub(4) {
+                        hour_markers.push((col, format!("{:02}:00", hour)));
+                    }
+                }
+            }
+        }
+    }
 
-    // pad to fill area
-    let fill_height = chunks[0].height.saturating_sub(2) as usize;
+    let mut axis_chars = vec![' '; inner_width];
+    let start_bytes: Vec<char> = start_label.chars().collect();
+    for (i, ch) in start_bytes.iter().enumerate() {
+        if i < inner_width {
+            axis_chars[i] = *ch;
+        }
+    }
+    let end_bytes: Vec<char> = end_label.chars().collect();
+    let end_start = inner_width.saturating_sub(end_bytes.len());
+    for (i, ch) in end_bytes.iter().enumerate() {
+        axis_chars[end_start + i] = *ch;
+    }
+    for (col, label) in &hour_markers {
+        let label_chars: Vec<char> = label.chars().collect();
+        let start_pos = col.saturating_sub(label_chars.len() / 2);
+        let mut can_place = true;
+        for i in 0..label_chars.len() {
+            let pos = start_pos + i;
+            if pos >= inner_width || axis_chars[pos] != ' ' {
+                can_place = false;
+                break;
+            }
+        }
+        if can_place {
+            for (i, ch) in label_chars.iter().enumerate() {
+                axis_chars[start_pos + i] = *ch;
+            }
+        }
+    }
+
+    let axis_str: String = axis_chars.into_iter().collect();
+    lines.push(Line::from(Span::styled(axis_str, theme.key_desc())));
+
     while lines.len() < fill_height {
         lines.push(Line::from(""));
     }
@@ -159,13 +195,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(" timeline "));
     frame.render_widget(timeline, chunks[0]);
 
-    // --- legend rendering ---
     let mut legend_lines: Vec<Line> = Vec::new();
     let mut current_spans: Vec<Span> = Vec::new();
     let mut current_width = 0;
 
     for (name, color) in &color_map {
-        let item_width = name.len() + 4; // "█ name  "
+        let item_width = name.len() + 4;
         if current_width + item_width > inner_w && !current_spans.is_empty() {
             legend_lines.push(Line::from(std::mem::take(&mut current_spans)));
             current_width = 0;

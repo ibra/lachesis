@@ -17,6 +17,16 @@ fn find_daemon_process(sys: &mut System, pid: u32) -> bool {
         .unwrap_or(false)
 }
 
+pub fn is_daemon_running(config_dir: &Path) -> bool {
+    match read_daemon_pid(config_dir) {
+        Some(pid) => {
+            let mut sys = System::new();
+            find_daemon_process(&mut sys, pid)
+        }
+        None => false,
+    }
+}
+
 pub fn start_monitoring(config_dir: &Path) -> Result<(), Box<dyn Error>> {
     if let Some(pid) = read_daemon_pid(config_dir) {
         let mut sys = System::new();

@@ -1,25 +1,18 @@
 use crate::app::App;
+use crate::theme::Theme;
 use ratatui::{
     prelude::*,
-    widgets::{
-        Block, Borders, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState,
-        Table,
-    },
+    widgets::{Block, Borders, Cell, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
 
-pub fn render(app: &App, frame: &mut Frame, area: Rect) {
-    let non_idle: Vec<_> = app.today_sessions.iter().filter(|s| !s.idle).collect();
+pub fn render(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let non_idle: Vec<_> = app.sessions.iter().filter(|s| !s.idle).collect();
 
     if non_idle.is_empty() {
-        let empty =
-            Paragraph::new(" no sessions recorded today. start the daemon with `laches start`.")
-                .style(Style::default().fg(Color::DarkGray))
-                .block(Block::default().borders(Borders::ALL).title(" sessions "));
-        frame.render_widget(empty, area);
+        super::render_empty(app, frame, area, theme, "sessions");
         return;
     }
 
-    // account for borders (2) + header row (1) + header bottom_margin (1) = 4
     let max_visible = area.height.saturating_sub(4) as usize;
     if max_visible == 0 {
         return;
@@ -57,10 +50,10 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
             let title = s.window_title.as_deref().unwrap_or("");
             let title_display = laches::utils::truncate_str(title, 40);
 
-            let time_range = format!("{}-{}", start, end);
+            let time_range = format!("{}\u{2013}{}", start, end);
 
             let style = if s.end_time.is_none() {
-                Style::default().fg(Color::Green).bold()
+                theme.active_row()
             } else {
                 Style::default()
             };
@@ -76,10 +69,10 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .collect();
 
     let header = Row::new(vec![
-        Cell::from("time").style(Style::default().fg(Color::Cyan).bold()),
-        Cell::from("process").style(Style::default().fg(Color::Cyan).bold()),
-        Cell::from("duration").style(Style::default().fg(Color::Cyan).bold()),
-        Cell::from("window title").style(Style::default().fg(Color::Cyan).bold()),
+        Cell::from("time").style(theme.column_header()),
+        Cell::from("process").style(theme.column_header()),
+        Cell::from("duration").style(theme.column_header()),
+        Cell::from("window title").style(theme.column_header()),
     ])
     .bottom_margin(1);
 
@@ -107,7 +100,6 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
 
     frame.render_widget(table, area);
 
-    // scrollbar
     if non_idle.len() > max_visible {
         let mut scrollbar_state =
             ScrollbarState::new(non_idle.len().saturating_sub(max_visible)).position(scroll);

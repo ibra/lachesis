@@ -1,9 +1,11 @@
-use laches::db::{today_range, Database, ProcessSummary, Session};
+use laches::db::{date_range_for_day, Database, ProcessSummary, Session};
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Tabs},
 };
+use std::path::PathBuf;
 
+use crate::theme::Theme;
 use crate::views;
 
 const TAB_TITLES: [&str; 4] = ["today", "timeline", "trends", "sessions"];
@@ -11,33 +13,43 @@ const TAB_COUNT: usize = TAB_TITLES.len();
 
 pub struct App<'a> {
     pub db: &'a Database,
+    pub config_dir: PathBuf,
     pub tab: usize,
+    pub viewing_date: chrono::NaiveDate,
 
     pub scroll_offsets: [usize; TAB_COUNT],
 
-    pub today_summaries: Vec<ProcessSummary>,
-    pub today_sessions: Vec<Session>,
-    pub today_active: i64,
-    pub today_idle: i64,
+    pub summaries: Vec<ProcessSummary>,
+    pub sessions: Vec<Session>,
+    pub active_secs: i64,
+    pub idle_secs: i64,
     pub daily_totals: Vec<(String, i64)>,
     pub current_process: Option<String>,
+    pub daemon_running: bool,
     pub last_error: Option<String>,
 }
 
 impl<'a> App<'a> {
-    pub fn new(db: &'a Database) -> Self {
+    pub fn new(db: &'a Database, config_dir: PathBuf) -> Self {
         Self {
             db,
+            config_dir,
             tab: 0,
+            viewing_date: chrono::Local::now().date_naive(),
             scroll_offsets: [0; TAB_COUNT],
-            today_summaries: Vec::new(),
-            today_sessions: Vec::new(),
-            today_active: 0,
-            today_idle: 0,
+            summaries: Vec::new(),
+            sessions: Vec::new(),
+            active_secs: 0,
+            idle_secs: 0,
             daily_totals: Vec::new(),
             current_process: None,
+            daemon_running: false,
             last_error: None,
         }
+    }
+
+    pub fn is_viewing_today(&self) -> bool {
+        self.viewing_date == chrono::Local::now().date_naive()
     }
 
     pub fn set_tab(&mut self, tab: usize) {
@@ -58,6 +70,25 @@ impl<'a> App<'a> {
         };
     }
 
+    pub fn prev_day(&mut self) {
+        if let Some(d) = self.viewing_date.pred_opt() {
+            self.viewing_date = d;
+            self.scroll_offsets = [0; TAB_COUNT];
+            self.refresh_data();
+        }
+    }
+
+    pub fn next_day(&mut self) {
+        let today = chrono::Local::now().date_naive();
+        if let Some(d) = self.viewing_date.succ_opt() {
+            if d <= today {
+                self.viewing_date = d;
+                self.scroll_offsets = [0; TAB_COUNT];
+                self.refresh_data();
+            }
+        }
+    }
+
     pub fn scroll_up(&mut self) {
         self.scroll_offsets[self.tab] = self.scroll_offsets[self.tab].saturating_sub(1);
     }
@@ -71,53 +102,57 @@ impl<'a> App<'a> {
 
     fn scrollable_item_count(&self, tab: usize) -> usize {
         match tab {
-            0 => self.today_summaries.len(),
-            3 => self.today_sessions.iter().filter(|s| !s.idle).count(),
+            0 => self.summaries.len(),
+            3 => self.sessions.iter().filter(|s| !s.idle).count(),
             _ => 0,
         }
     }
 
     pub fn refresh_data(&mut self) {
         self.last_error = None;
-        let (today_start, today_end) = today_range();
 
-        match self
-            .db
-            .query_process_summaries(&today_start, &today_end, None)
-        {
-            Ok(v) => self.today_summaries = v,
+        let date_str = self.viewing_date.format("%Y-%m-%d").to_string();
+        let (day_start, day_end) = match date_range_for_day(&date_str) {
+            Some(r) => r,
+            None => {
+                self.last_error = Some(format!("invalid date: {}", date_str));
+                return;
+            }
+        };
+
+        match self.db.query_process_summaries(&day_start, &day_end, None) {
+            Ok(v) => self.summaries = v,
             Err(e) => {
                 self.last_error = Some(format!("query failed: {}", e));
                 return;
             }
         }
 
-        match self.db.query_sessions(&today_start, &today_end) {
-            Ok(v) => self.today_sessions = v,
+        match self.db.query_sessions(&day_start, &day_end) {
+            Ok(v) => self.sessions = v,
             Err(e) => {
                 self.last_error = Some(format!("query failed: {}", e));
                 return;
             }
         }
 
-        self.today_active = self
+        self.active_secs = self
             .db
-            .query_total_active_seconds(&today_start, &today_end)
+            .query_total_active_seconds(&day_start, &day_end)
             .unwrap_or(0);
 
-        self.today_idle = self
+        self.idle_secs = self
             .db
-            .query_total_idle_seconds(&today_start, &today_end)
+            .query_total_idle_seconds(&day_start, &day_end)
             .unwrap_or(0);
 
         self.daily_totals.clear();
         let today = chrono::Local::now().date_naive();
         let start_day = today - chrono::Duration::days(29);
         let (range_start, _) =
-            laches::db::date_range_for_day(&start_day.format("%Y-%m-%d").to_string())
-                .unwrap_or_default();
-        let (_, range_end) = laches::db::date_range_for_day(&today.format("%Y-%m-%d").to_string())
-            .unwrap_or_default();
+            date_range_for_day(&start_day.format("%Y-%m-%d").to_string()).unwrap_or_default();
+        let (_, range_end) =
+            date_range_for_day(&today.format("%Y-%m-%d").to_string()).unwrap_or_default();
 
         let db_totals: std::collections::HashMap<String, i64> =
             match self.db.query_daily_totals(&range_start, &range_end) {
@@ -136,16 +171,21 @@ impl<'a> App<'a> {
                 .push((date.format("%m/%d").to_string(), total));
         }
 
-        self.current_process = self
-            .db
-            .get_open_session()
-            .ok()
-            .flatten()
-            .filter(|s| !s.idle)
-            .map(|s| s.process_name);
+        self.current_process = if self.is_viewing_today() {
+            self.db
+                .get_open_session()
+                .ok()
+                .flatten()
+                .filter(|s| !s.idle)
+                .map(|s| s.process_name)
+        } else {
+            None
+        };
+
+        self.daemon_running = laches::process::is_daemon_running(&self.config_dir);
     }
 
-    pub fn render(&self, frame: &mut Frame) {
+    pub fn render(&self, frame: &mut Frame, theme: &Theme) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -155,51 +195,53 @@ impl<'a> App<'a> {
             ])
             .split(frame.area());
 
-        // tab bar with date in title
-        let date_str = chrono::Local::now().format("%a %b %d").to_string();
+        let date_str = if self.is_viewing_today() {
+            format!("today ({})", self.viewing_date.format("%a %b %d"))
+        } else {
+            self.viewing_date.format("%a %b %d, %Y").to_string()
+        };
         let title = format!(" lachesis \u{2500} {} ", date_str);
         let tabs = Tabs::new(TAB_TITLES.iter().map(|t| Line::from(*t)))
             .block(Block::default().borders(Borders::ALL).title(title))
             .select(self.tab)
-            .style(Style::default().fg(Color::DarkGray))
-            .highlight_style(Style::default().fg(Color::Cyan).bold())
-            .divider(Span::styled(
-                " \u{2502} ",
-                Style::default().fg(Color::DarkGray),
-            ));
+            .style(theme.tab_inactive())
+            .highlight_style(theme.tab_active())
+            .divider(theme.separator());
         frame.render_widget(tabs, chunks[0]);
 
-        // active view
         match self.tab {
-            0 => views::today::render(self, frame, chunks[1]),
-            1 => views::timeline::render(self, frame, chunks[1]),
-            2 => views::trends::render(self, frame, chunks[1]),
-            3 => views::sessions::render(self, frame, chunks[1]),
+            0 => views::today::render(self, frame, chunks[1], theme),
+            1 => views::timeline::render(self, frame, chunks[1], theme),
+            2 => views::trends::render(self, frame, chunks[1], theme),
+            3 => views::sessions::render(self, frame, chunks[1], theme),
             _ => {}
         }
 
         let footer = if let Some(ref err) = self.last_error {
             Line::from(vec![
-                Span::styled(" ERROR ", Style::default().fg(Color::Red).bold()),
-                Span::styled(err.as_str(), Style::default().fg(Color::Red)),
+                Span::styled(" ERROR ", theme.error_label()),
+                Span::styled(err.as_str(), theme.error_text()),
             ])
         } else {
-            let sep = Span::styled(" \u{2502} ", Style::default().fg(Color::DarkGray));
+            let sep = theme.separator();
             let time_str = chrono::Local::now().format("%H:%M").to_string();
             Line::from(vec![
-                Span::styled(" q", Style::default().bold()),
-                Span::styled(" quit", Style::default().fg(Color::DarkGray)),
+                Span::styled(" q", theme.key_hint()),
+                Span::styled(" quit", theme.key_desc()),
                 sep.clone(),
-                Span::styled("tab", Style::default().bold()),
-                Span::styled(" switch", Style::default().fg(Color::DarkGray)),
+                Span::styled("tab", theme.key_hint()),
+                Span::styled(" switch", theme.key_desc()),
                 sep.clone(),
-                Span::styled("j/k", Style::default().bold()),
-                Span::styled(" scroll", Style::default().fg(Color::DarkGray)),
+                Span::styled("h/l", theme.key_hint()),
+                Span::styled(" day", theme.key_desc()),
                 sep.clone(),
-                Span::styled("r", Style::default().bold()),
-                Span::styled(" refresh", Style::default().fg(Color::DarkGray)),
+                Span::styled("j/k", theme.key_hint()),
+                Span::styled(" scroll", theme.key_desc()),
+                sep.clone(),
+                Span::styled("r", theme.key_hint()),
+                Span::styled(" refresh", theme.key_desc()),
                 sep,
-                Span::styled(time_str, Style::default().fg(Color::DarkGray)),
+                Span::styled(time_str, theme.key_desc()),
             ])
         };
         frame.render_widget(footer, chunks[2]);
