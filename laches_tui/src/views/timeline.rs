@@ -16,7 +16,7 @@ const PALETTE: [Color; 8] = [
     Color::LightGreen,
 ];
 
-const TIMESTAMP_FMT: &str = "%Y-%m-%dT%H:%M:%S";
+use laches::db::TIMESTAMP_FORMAT;
 
 /// Parsed session with pre-computed timestamps for efficient timeline rendering.
 struct TimelineEntry {
@@ -43,11 +43,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
         .iter()
         .rev() // chronological order
         .filter_map(|s| {
-            let start = chrono::NaiveDateTime::parse_from_str(&s.start_time, TIMESTAMP_FMT).ok()?;
+            let start =
+                chrono::NaiveDateTime::parse_from_str(&s.start_time, TIMESTAMP_FORMAT).ok()?;
             let end = s
                 .end_time
                 .as_ref()
-                .and_then(|e| chrono::NaiveDateTime::parse_from_str(e, TIMESTAMP_FMT).ok())
+                .and_then(|e| chrono::NaiveDateTime::parse_from_str(e, TIMESTAMP_FORMAT).ok())
                 .unwrap_or(now);
             Some(TimelineEntry {
                 process_name: s.process_name.clone(),
