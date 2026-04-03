@@ -1,7 +1,7 @@
+pub mod insights;
 pub mod sessions;
 pub mod timeline;
 pub mod today;
-pub mod trends;
 
 use crate::app::App;
 use crate::theme::Theme;
