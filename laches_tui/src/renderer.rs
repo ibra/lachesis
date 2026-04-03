@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Padding, Paragraph, Tabs},
 };
 
-const TAB_TITLES: [&str; 4] = ["today", "timeline", "trends", "sessions"];
+const TAB_TITLES: [&str; 4] = ["today", "timeline", "insights", "sessions"];
 
 pub fn render(app: &App, frame: &mut Frame, theme: &Theme) {
     let chunks = Layout::default()
@@ -35,7 +35,7 @@ pub fn render(app: &App, frame: &mut Frame, theme: &Theme) {
     match app.tab {
         0 => views::today::render(app, frame, chunks[1], theme),
         1 => views::timeline::render(app, frame, chunks[1], theme),
-        2 => views::trends::render(app, frame, chunks[1], theme),
+        2 => views::insights::render(app, frame, chunks[1], theme),
         3 => views::sessions::render(app, frame, chunks[1], theme),
         _ => {}
     }
