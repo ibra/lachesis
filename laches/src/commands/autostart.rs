@@ -29,8 +29,8 @@ pub fn handle_autostart(toggle: &str, config_dir: &Path) -> Result<(), Box<dyn E
     let auto = AutoLaunch::new(
         "laches_mon",
         laches_mon_path.to_str().ok_or("invalid path")?,
-        &args,
         false,
+        &args,
     );
 
     #[cfg(not(target_os = "macos"))]

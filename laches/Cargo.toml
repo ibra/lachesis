@@ -19,7 +19,6 @@ uuid.workspace = true
 colored = "2.1"
 dirs = "5.0.1"
 sysinfo = "0.30.13"
-tabled = "0.16.0"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [
