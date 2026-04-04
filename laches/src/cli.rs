@@ -30,9 +30,29 @@ pub enum Commands {
         #[arg(long)]
         today: bool,
 
+        /// show last 7 days
+        #[arg(short, long)]
+        week: bool,
+
+        /// show last 30 days
+        #[arg(short, long)]
+        month: bool,
+
         /// show usage for a specific date (YYYY-MM-DD)
         #[arg(short, long)]
         date: Option<String>,
+
+        /// date range (YYYY-MM-DD..YYYY-MM-DD)
+        #[arg(long)]
+        range: Option<String>,
+
+        /// show individual sessions instead of process summaries
+        #[arg(short, long)]
+        sessions: bool,
+
+        /// show extra columns (active days, avg/day, session count)
+        #[arg(short, long)]
+        verbose: bool,
 
         /// include data from all synced machines
         #[arg(short = 'a', long)]
