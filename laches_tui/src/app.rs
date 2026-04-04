@@ -1,0 +1,154 @@
+use laches::db::{today_range, Database, ProcessSummary, Session};
+use ratatui::{
+    prelude::*,
+    widgets::{Block, Borders, Tabs},
+};
+
+use crate::views;
+
+const TAB_TITLES: [&str; 4] = ["today", "timeline", "trends", "sessions"];
+
+pub struct App<'a> {
+    pub db: &'a Database,
+    pub tab: usize,
+    pub scroll: usize,
+
+    // cached data (refreshed periodically)
+    pub today_summaries: Vec<ProcessSummary>,
+    pub today_sessions: Vec<Session>,
+    pub today_active: i64,
+    pub today_idle: i64,
+    pub daily_totals: Vec<(String, i64)>,
+    pub current_process: Option<String>,
+}
+
+impl<'a> App<'a> {
+    pub fn new(db: &'a Database) -> Self {
+        Self {
+            db,
+            tab: 0,
+            scroll: 0,
+            today_summaries: Vec::new(),
+            today_sessions: Vec::new(),
+            today_active: 0,
+            today_idle: 0,
+            daily_totals: Vec::new(),
+            current_process: None,
+        }
+    }
+
+    pub fn set_tab(&mut self, tab: usize) {
+        if tab < TAB_TITLES.len() {
+            self.tab = tab;
+            self.scroll = 0;
+        }
+    }
+
+    pub fn next_tab(&mut self) {
+        self.tab = (self.tab + 1) % TAB_TITLES.len();
+        self.scroll = 0;
+    }
+
+    pub fn prev_tab(&mut self) {
+        self.tab = if self.tab == 0 {
+            TAB_TITLES.len() - 1
+        } else {
+            self.tab - 1
+        };
+        self.scroll = 0;
+    }
+
+    pub fn scroll_up(&mut self) {
+        self.scroll = self.scroll.saturating_sub(1);
+    }
+
+    pub fn scroll_down(&mut self) {
+        self.scroll = self.scroll.saturating_add(1);
+    }
+
+    pub fn refresh_data(&mut self) {
+        let (today_start, today_end) = today_range();
+
+        self.today_summaries = self
+            .db
+            .query_process_summaries(&today_start, &today_end, None)
+            .unwrap_or_default();
+
+        self.today_sessions = self
+            .db
+            .query_sessions(&today_start, &today_end)
+            .unwrap_or_default();
+
+        self.today_active = self
+            .db
+            .query_total_active_seconds(&today_start, &today_end)
+            .unwrap_or(0);
+
+        self.today_idle = self
+            .db
+            .query_total_idle_seconds(&today_start, &today_end)
+            .unwrap_or(0);
+
+        // daily totals for the last 30 days
+        self.daily_totals.clear();
+        let today = chrono::Local::now().date_naive();
+        for i in (0..30).rev() {
+            let date = today - chrono::Duration::days(i);
+            let date_str = date.format("%Y-%m-%d").to_string();
+            if let Some((s, e)) = laches::db::date_range_for_day(&date_str) {
+                let total = self.db.query_total_active_seconds(&s, &e).unwrap_or(0);
+                self.daily_totals
+                    .push((date.format("%m/%d").to_string(), total));
+            }
+        }
+
+        // current process (open session)
+        self.current_process = self
+            .db
+            .get_open_session()
+            .ok()
+            .flatten()
+            .filter(|s| !s.idle)
+            .map(|s| s.process_name);
+    }
+
+    pub fn render(&self, frame: &mut Frame) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Min(0),
+                Constraint::Length(1),
+            ])
+            .split(frame.area());
+
+        // tab bar
+        let tabs = Tabs::new(TAB_TITLES.iter().map(|t| Line::from(*t)))
+            .block(Block::default().borders(Borders::ALL).title(" lachesis "))
+            .select(self.tab)
+            .highlight_style(Style::default().fg(Color::Cyan).bold());
+        frame.render_widget(tabs, chunks[0]);
+
+        // active view
+        match self.tab {
+            0 => views::today::render(self, frame, chunks[1]),
+            1 => views::timeline::render(self, frame, chunks[1]),
+            2 => views::trends::render(self, frame, chunks[1]),
+            3 => views::sessions::render(self, frame, chunks[1]),
+            _ => {}
+        }
+
+        // footer
+        let footer = Line::from(vec![
+            Span::raw(" q"),
+            Span::styled(" quit  ", Style::default().fg(Color::DarkGray)),
+            Span::raw("tab"),
+            Span::styled(" switch  ", Style::default().fg(Color::DarkGray)),
+            Span::raw("j/k"),
+            Span::styled(" scroll  ", Style::default().fg(Color::DarkGray)),
+            Span::raw("r"),
+            Span::styled(" refresh", Style::default().fg(Color::DarkGray)),
+        ]);
+        frame.render_widget(footer, chunks[2]);
+    }
+}
