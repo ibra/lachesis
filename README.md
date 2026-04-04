@@ -34,10 +34,17 @@ the daemon (`laches_mon`) checks the focused window every 2 seconds. when focus 
 laches start                       # start the daemon
 laches stop                        # stop the daemon
 
-laches list                        # show tracked process usage
+laches summary                     # quick daily overview with comparisons
+
+laches list                        # show all tracked process usage
 laches list --today                # today only
+laches list --week                 # last 7 days
+laches list --month                # last 30 days
 laches list --date 2025-01-15      # specific date
+laches list --range "2025-01-01..2025-01-31"
 laches list --tag work             # filter by tag
+laches list --sessions             # show individual sessions
+laches list --verbose              # extra columns (active days, avg, sessions)
 
 laches tag firefox --add browser
 laches tag firefox --remove browser
