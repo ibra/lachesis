@@ -207,4 +207,5 @@ impl From<CliFilterMode> for FilterMode {
 pub enum AutostartToggle {
     On,
     Off,
+    Status,
 }

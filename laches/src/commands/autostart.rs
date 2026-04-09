@@ -62,6 +62,13 @@ pub fn handle_autostart(toggle: &AutostartToggle, config_dir: &Path) -> Result<(
                 println!("info: disabled laches_mon from running at startup.");
             }
         }
+        AutostartToggle::Status => {
+            if auto.is_enabled()? {
+                println!("autostart is enabled.");
+            } else {
+                println!("autostart is disabled.");
+            }
+        }
     }
 
     Ok(())
