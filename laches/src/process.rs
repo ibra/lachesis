@@ -42,7 +42,11 @@ pub fn start_monitoring(config_dir: &Path) -> Result<(), LachesError> {
 
     let mut exe_path = env::current_exe()?;
     exe_path.pop();
-    exe_path.push("laches_mon");
+    if cfg!(windows) {
+        exe_path.push("laches_mon.exe");
+    } else {
+        exe_path.push("laches_mon");
+    }
 
     let mut child = Command::new(&exe_path)
         .arg(config_dir)
