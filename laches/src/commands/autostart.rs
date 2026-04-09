@@ -24,22 +24,26 @@ pub fn handle_autostart(toggle: &AutostartToggle, config_dir: &Path) -> Result<(
     }
 
     // the daemon now takes the config directory as its only argument
+    // on windows, the auto-launch crate writes unquoted paths to the registry
+    // Run key, so paths with spaces (e.g. "C:\Users\John Smith\...") break
+    // silently. we quote both the exe path and args to avoid this.
+    let app_path_str = laches_mon_path.to_str().ok_or("invalid path")?;
+
+    #[cfg(windows)]
+    let app_path_quoted = format!("\"{}\"", app_path_str);
+    #[cfg(not(windows))]
+    let app_path_quoted = app_path_str.to_string();
+
+    #[cfg(windows)]
+    let args = vec![format!("\"{}\"", config_dir.to_string_lossy())];
+    #[cfg(not(windows))]
     let args = vec![config_dir.to_string_lossy().to_string()];
 
     #[cfg(target_os = "macos")]
-    let auto = AutoLaunch::new(
-        "laches_mon",
-        laches_mon_path.to_str().ok_or("invalid path")?,
-        false,
-        &args,
-    );
+    let auto = AutoLaunch::new("laches_mon", &app_path_quoted, false, &args);
 
     #[cfg(not(target_os = "macos"))]
-    let auto = AutoLaunch::new(
-        "laches_mon",
-        laches_mon_path.to_str().ok_or("invalid path")?,
-        &args,
-    );
+    let auto = AutoLaunch::new("laches_mon", &app_path_quoted, &args);
 
     match toggle {
         AutostartToggle::On => {
