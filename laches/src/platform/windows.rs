@@ -114,7 +114,7 @@ mod tests {
     fn test_get_focused_window_returns_something() {
         let tracker = WindowsFocusTracker::new();
         // on a machine with a desktop session, this should return Some
-        // in CI without a desktop, it may return None -- that's fine
+        // in CI without a desktop, it may return None
         let result = tracker.get_focused_window();
         if let Some(info) = result {
             assert!(!info.process_name.is_empty());

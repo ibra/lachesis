@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn test_new_does_not_panic() {
-        // on a machine without X11, inner will be None -- that's fine
+        // on a machine without X11, inner will be None
         let _tracker = LinuxFocusTracker::new();
     }
 
