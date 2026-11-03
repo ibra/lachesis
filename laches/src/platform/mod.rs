@@ -42,6 +42,27 @@ mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
 
+/// Hint shown when the platform needs a permission grant to record window titles.
+pub const PERMISSION_HINT: &str =
+    "accessibility permission not granted; window titles will not be recorded \
+(grant it in System Settings > Privacy & Security > Accessibility)";
+
+/// Check whether the platform permissions needed for full tracking are granted.
+/// On macOS this is Accessibility (for window titles); with `prompt`, the system
+/// dialog asking the user to grant it is shown. Other platforms need nothing.
+pub fn ensure_permissions(prompt: bool) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        macos::accessibility_trusted(prompt)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = prompt;
+        true
+    }
+}
+
 /// Create a FocusTracker for the current platform.
 pub fn create_tracker() -> Box<dyn FocusTracker> {
     #[cfg(target_os = "windows")]

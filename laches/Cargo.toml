@@ -32,5 +32,40 @@ windows = { version = "0.58", features = [
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = { version = "0.13", features = ["screensaver"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSDate",
+    "NSRunLoop",
+    "NSString",
+    "NSURL",
+] }
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSRunningApplication",
+    "NSWorkspace",
+    "libc",
+] }
+objc2-application-services = { version = "0.3", default-features = false, features = [
+    "std",
+    "HIServices",
+    "AXUIElement",
+    "AXError",
+    "libc",
+] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = [
+    "std",
+    "CGEventSource",
+    "CGEventTypes",
+] }
+objc2-core-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "CFBase",
+    "CFDictionary",
+    "CFNumber",
+    "CFString",
+] }
+
 [dev-dependencies]
 tempfile = "3.8"

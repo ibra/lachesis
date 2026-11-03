@@ -13,7 +13,7 @@ lachesis is a cli-based, customizable, automatic time tracking tool for monitori
 - **data export**: export tracked sessions to json, optionally filtered by duration.
 - **per-machine sync**: each machine writes its own sqlite database. sync the `data/` directory with syncthing or dropbox with zero conflicts.
 - **tui dashboard**: interactive terminal dashboard with today view, timeline, trends, and session list. supports date navigation, live window title display, tag grouping, and a help overlay (`laches_tui`).
-- **cross-platform**: windows (full support), linux and macos (stubs, contributions welcome).
+- **cross-platform**: windows and macos (full support), linux (x11; wayland not yet supported).
 
 ## usage
 
@@ -105,6 +105,17 @@ laches blacklist clear
 laches autostart on
 laches autostart off
 ```
+
+### macos permissions
+
+app and idle tracking need no permissions. window titles are read through the accessibility api, so they need **accessibility** permission (system settings > privacy & security > accessibility). without it, lachesis still tracks apps but records no titles; `laches start` prints a warning and the daemon logs one to `daemon.log`.
+
+macos grants the permission to the process responsible for the daemon:
+
+- started with `laches start` from a terminal: grant it to your terminal app (e.g. terminal, iterm2, ghostty).
+- started via `laches autostart on`: grant it to `laches_mon` itself (the system prompt appears on first launch).
+
+unsigned binaries may need the permission granted again after an upgrade or rebuild.
 
 ### configuration
 

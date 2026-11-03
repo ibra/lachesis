@@ -84,6 +84,10 @@ pub fn start_monitoring(config_dir: &Path) -> Result<(), LachesError> {
 
     println!("info: started laches_mon daemon (pid: {})", pid);
 
+    if !crate::platform::ensure_permissions(false) {
+        println!("warning: {}", crate::platform::PERMISSION_HINT);
+    }
+
     Ok(())
 }
 

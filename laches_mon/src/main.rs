@@ -2,7 +2,7 @@ use laches::{
     commands::filtering::CompiledFilter,
     config::{get_machine_id, load_or_create_config},
     db::Database,
-    platform::{create_tracker, FocusInfo},
+    platform::{create_tracker, ensure_permissions, FocusInfo, PERMISSION_HINT},
 };
 use std::{
     env,
@@ -177,6 +177,9 @@ fn main() {
     .expect("error: failed to set signal handler");
 
     let tracker = create_tracker();
+    if !ensure_permissions(true) {
+        logger.log(&format!("warning: {}", PERMISSION_HINT));
+    }
     let filter = CompiledFilter::new(
         config.filtering.mode.clone(),
         &config.filtering.whitelist,
