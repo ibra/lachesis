@@ -353,7 +353,7 @@ impl<'a> App<'a> {
             })
             .collect();
 
-        groups.sort_by(|a, b| b.total_seconds.cmp(&a.total_seconds));
+        groups.sort_by_key(|a| std::cmp::Reverse(a.total_seconds));
 
         if !untagged_procs.is_empty() {
             groups.push(TagGroup {
